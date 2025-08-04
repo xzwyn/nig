@@ -45,135 +45,48 @@ dot.edge('display', 'end')
 
 # Render the diagram in Colab
 dot
+import graphviz
+
+# Create a new directed graph
+dot = graphviz.Digraph(comment='FinanzAgent - Detailed Agent Flow')
+
+# --- Define Global Graph Attributes for a clean, professional look ---
+dot.attr('graph', rankdir='TB', splines='ortho', bgcolor='transparent', label='Detailed Agent (LangGraph) Flow', fontname='Arial', fontsize='14', fontcolor='#333333')
+dot.attr('node', shape='box', style='filled,rounded', fillcolor='#E6F0FF', fontname='Arial', fontsize='11', color='#6C8EBF')
+dot.attr('edge', fontname='Arial', fontsize='9', color='#555555')
+
+# --- Define Nodes (Steps in the process) ---
+# We use different shapes and colors for clarity
+
+# Start and End nodes
+dot.node('start', 'Agent Invoked with\noriginal_text', shape='ellipse', fillcolor='#D5E8D4', color='#82B366')
+dot.node('end', 'End Agent:\nReturn final_translation', shape='ellipse', fillcolor='#D5E8D4', color='#82B336')
+
+# Processing nodes
+dot.node('translate', 'NODE: TRANSLATE\nTool: translate_with_helsinki()')
+dot.node('retranslate', 'NODE: RETRANSLATE\nTool: retranslate_with_feedback()')
+dot.node('choose_best', 'NODE: CHOOSE_BEST\nTool: choose_best_translation()')
+dot.node('finalize', 'NODE: FINALIZE\nSet final_translation')
+
+# Decision node (visually distinct)
+dot.node('grade', 'NODE: GRADE\nTool: grade_translation()', shape='diamond', fillcolor='#FFF2CC', color='#D6B656')
 
 
-# Cell 1: Installation
-# Install the system dependency for graph visualization
-!apt-get install -y graphviz
+# --- Define Edges (Connections and Logic Flow) ---
+dot.edge('start', 'translate')
+dot.edge('translate', 'grade')
 
-# Install the required Python libraries
-!pip install langgraph langchain-ollama pygraphviz
-# Cell 2: Define Mock Tools
+# Decision paths from the 'GRADE' node
+dot.edge('grade', 'finalize', label='Grade == "APPROVE"', color='#2E7D32', fontcolor='#2E7D32', penwidth='1.5')
+dot.edge('grade', 'retranslate', label='Grade == "REJECT"\n& retries < 3', color='#C62828', fontcolor='#C62828', penwidth='1.5')
+dot.edge('grade', 'choose_best', label='Grade == "REJECT"\n& retries >= 3', color='#EF6C00', fontcolor='#EF6C00', penwidth='1.5')
 
-# These are placeholder functions that mimic our tools.py file for visualization purposes.
-# They have the same names and inputs but don't perform any real work.
+# The main correction loop
+dot.edge('retranslate', 'grade', label='Submit for re-grading', style='dashed')
 
-def translate_with_helsinki(text: str) -> str:
-    """Mock: Translates English text to German."""
-    print("Called translate_with_helsinki")
-    return "mock german translation"
+# Final paths to the end state
+dot.edge('finalize', 'end')
+dot.edge('choose_best', 'end')
 
-def grade_translation(original_text: str, translated_text: str) -> dict:
-    """Mock: Grades a translation."""
-    print("Called grade_translation")
-    # We can simulate different outcomes by changing the return value here
-    return {"grade": "REJECT", "critique": "Mock critique"}
-
-def retranslate_with_feedback(original_text: str, failed_translation: str, critique: str) -> str:
-    """Mock: Attempts a corrected translation."""
-    print("Called retranslate_with_feedback")
-    return "mock corrected german translation"
-
-def choose_best_translation(original_text: str, translation_a: str, translation_b: str) -> str:
-    """Mock: Chooses the better of two translations."""
-    print("Called choose_best_translation")
-    return "mock best translation"
-
-print("✅ Mock tools defined successfully.")
-# Cell 3: Define the LangGraph Agent
-
-from typing import List, TypedDict
-from langgraph.graph import StateGraph, END
-
-# This is the exact code from our translation_agent.py file
-
-# 1. Define the State
-class GraphState(TypedDict):
-    original_text: str
-    translation_history: List[str]
-    critique_history: List[str]
-    retry_count: int
-    final_translation: str
-    grade: str 
-
-# 2. Define the Nodes
-def translate_node(state: GraphState):
-    original = state['original_text']
-    translation = translate_with_helsinki(original)
-    return {"translation_history": [translation], "retry_count": 0}
-
-def grade_node(state: GraphState):
-    original = state['original_text']
-    latest_translation = state['translation_history'][-1]
-    grade_result = grade_translation(original, latest_translation)
-    return {"critique_history": state['critique_history'] + [grade_result['critique']], "grade": grade_result['grade']}
-
-def retranslate_node(state: GraphState):
-    original = state['original_text']
-    failed_translation = state['translation_history'][-1]
-    critique = state['critique_history'][-1]
-    corrected_translation = retranslate_with_feedback(original, failed_translation, critique)
-    return {"translation_history": state['translation_history'] + [corrected_translation], "retry_count": state['retry_count'] + 1}
-
-def choose_best_node(state: GraphState):
-    original = state['original_text']
-    first_translation = state['translation_history'][0]
-    last_translation = state['translation_history'][-1]
-    best_translation = choose_best_translation(original, first_translation, last_translation)
-    return {"final_translation": best_translation}
-    
-def finalize_node(state: GraphState):
-    final_translation = state['translation_history'][-1]
-    return {"final_translation": final_translation}
-
-# 3. Define the Edges
-def should_continue(state: GraphState):
-    grade = state.get('grade')
-    retries = state['retry_count']
-    if grade == "APPROVE":
-        return "finalize"
-    elif retries >= 3:
-        return "choose_best"
-    else:
-        return "retranslate"
-
-# 4. Assemble the Graph
-def create_graph():
-    graph = StateGraph(GraphState)
-    graph.add_node("translate", translate_node)
-    graph.add_node("grade", grade_node)
-    graph.add_node("retranslate", retranslate_node)
-    graph.add_node("choose_best", choose_best_node)
-    graph.add_node("finalize", finalize_node)
-    graph.set_entry_point("translate")
-    graph.add_edge("choose_best", END)
-    graph.add_edge("finalize", END)
-    graph.add_edge("translate", "grade")
-    graph.add_edge("retranslate", "grade")
-    graph.add_conditional_edges(
-        "grade",
-        should_continue,
-        {"retranslate": "retranslate", "choose_best": "choose_best", "finalize": "finalize"}
-    )
-    return graph.compile()
-
-print("✅ Agent graph structure defined successfully.")
-# Cell 4: Generate and Display the Diagram
-
-from IPython.display import Image, display
-
-# Create the compiled graph object
-agent_graph = create_graph()
-
-# Generate the diagram as a PNG image in bytes
-png_bytes = agent_graph.get_graph().draw_png()
-
-# Display the image in the Colab output
-print("Displaying the agent graph:")
-display(Image(png_bytes))
-
-# Optionally, save the diagram to a file so you can download it
-output_filename = "finanzagent_graph.png"
-with open(output_filename, "wb") as f:
-    f.write(png_bytes)
-print(f"\nGraph saved to {output_filename}. You can download it from the Colab file browser (folder icon on the left).")
+# --- Render the Diagram in the Colab output ---
+dot
