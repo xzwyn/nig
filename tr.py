@@ -169,3 +169,35 @@ else:
     print(f"\n✅ Success! Your fine-tuning dataset with {len(finetuning_jsonl)} bidirectional instructions is ready.")
     print(f"File saved as: '{output_filename}'")
     print("\n📁 Output files are saved in /kaggle/working/ - you can download them or commit the notebook to save them.")
+
+
+# ==============================================================================
+# Step A: FIX DEPENDENCY CONFLICT
+# We force an older version of protobuf to prevent the 'AttributeError'.
+# This MUST be the very first command.
+# ==============================================================================
+print("⏳ Pinning protobuf version to fix library conflicts...")
+!pip install protobuf==3.20.3 --quiet
+print("✅ Protobuf version pinned.")
+
+
+# ==============================================================================
+# Step B: Install system dependencies for Tesseract and Poppler
+# ==============================================================================
+print("⏳ Installing system dependencies: Tesseract (deu+eng) and Poppler...")
+!apt-get update > /dev/null
+!apt-get install -y tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng poppler-utils > /dev/null
+print("✅ System dependencies installed.")
+
+
+# ==============================================================================
+# Step C: Install the necessary Python libraries
+# ==============================================================================
+print("⏳ Installing Python libraries: unstructured, sentence-transformers...")
+!pip install "unstructured[pdf,ocr]" sentence-transformers pandas nltk --quiet
+print("✅ Python libraries installed.")
+
+
+# ==============================================================================
+# Step D: Import libraries and define processing functions
+# ==============================================================================
