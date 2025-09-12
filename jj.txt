@@ -1,0 +1,27 @@
+Summary of Inserted Errors
+
+1. Factual Error (Incorrect Number)
+Location: In the paragraph describing the "Prüfungsausschuss" (Audit Committee). -----------starting paragraph of page 2
+Original Sentence (Implied from English): "Der Prüfungsausschuss hielt 2024 fünf ordentliche Sitzungen ab..." (The Audit Committee held five regular meetings in 2024...).
+Modified Sentence: "Der Prüfungsausschuss hielt 2024 acht ordentliche Sitzungen ab..." (The Audit Committee held eight regular meetings in 2024...).
+
+2. Omission
+Location: In the paragraph describing the audit focus areas defined at the group level. -----------second last paragraph of page 2
+Original Sentence (Implied from English): "...drei Prüfungsschwerpunkte definiert: die Überprüfung der Wirksamkeit bestimmter vom Vorstand ergriffener Maßnahmen im Hinblick auf die Umsetzung der Erkenntnisse aus der Structured Alpha-Angelegenheit, die Überprüfung der Wirksamkeit der an die Allianz Technology SE übertragenen IT-Outsourcing-Funktionen und eine Wiederholung der Prüfung ausgewählter Schlüsselkontrollen." (...three audit focus areas were defined: ...review of measures for Structured Alpha, the review of the effectiveness of IT outsourcing functions transferred to Allianz Technology SE, and a repeat audit...).
+Modified Sentence: "...drei Prüfungsschwerpunkte definiert: die Überprüfung der Wirksamkeit bestimmter vom Vorstand ergriffener Maßnahmen im Hinblick auf die Umsetzung der Erkenntnisse aus der Structured Alpha-Angelegenheit, und eine Wiederholung der Prüfung ausgewählter Schlüsselkontrollen."
+
+3. Mistranslation
+Location: In the very last sentence of the document. --------------finishing sentence of page 4
+Original Sentence (Implied from English): "Der Aufsichtsrat erhielt regelmäßige und umfassende Informationen über die von den Ausschüssen geleistete Arbeit." (The Supervisory Board received regular and comprehensive information...).
+Modified Sentence: "Der Aufsichtsrat erhielt regelmäßige und unvollständige Informationen über die von den Ausschüssen geleistete Arbeit." (The Supervisory Board received regular and incomplete information...).
+
+4. Content Mismatch --------------first sentence in page 3
+Original English Sentence: Furthermore, the Audit Committee was regularly informed by the Board of Management about the status of implementation of the measures taken by the Board of Management in response to findings from reviews by BaFin.
+Correct German Translation : Darüber hinaus wurde der Prüfungsausschuss regelmäßig vom Vorstand über den Stand der Umsetzung der vom Vorstand als Reaktion auf Erkenntnisse aus BaFin-Prüfungen ergriffenen Maßnahmen informiert.
+Corrupted German version: Darüber hinaus leitete der Prüfungsausschuss eine neue interne Untersuchung der vom Vorstand als Reaktion auf Erkenntnisse aus BaFin-Prüfungen ergriffenen Maßnahmen ein.
+
+
+
+
+
+
