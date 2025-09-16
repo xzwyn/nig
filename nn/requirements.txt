@@ -1,0 +1,15 @@
+streamlit
+
+pymupdf
+pytesseract
+Pillow
+
+sentence-transformers
+numpy
+scikit-learn
+scipy
+
+pandas
+openpyxl
+
+openai>=1.40.0
