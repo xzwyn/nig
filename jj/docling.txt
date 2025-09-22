@@ -1,0 +1,164 @@
+
+ibm-granite
+/
+granite-docling-258M 
+
+like
+478
+
+Follow
+
+IBM Granite
+2.53k
+Image-Text-to-Text
+Transformers
+Safetensors
+
+4 datasets
+English
+idefics3
+image-to-text
+text-generation
+documents
+code
+formula
+chart
+ocr
+layout
+table
+document-parse
+docling
+granite
+extraction
+math
+conversational
+
+arxiv:
+2501.17887
+
+arxiv:
+2503.11576
+
+arxiv:
+2305.03393
+
+License:
+apache-2.0
+Model card
+Files and versions
+xet
+Community
+22
+granite-docling-258m
+Granite Docling Logo
+Granite Docling is a multimodal Image-Text-to-Text model engineered for efficient document conversion. It preserves the core features of Docling while maintaining seamless integration with DoclingDocuments to ensure full compatibility.
+
+Model Summary:
+
+Granite Docling 258M builds upon the IDEFICS3 architecture, but introduces two key modifications: it replaces the vision encoder with siglip2-base-patch16-512 and substitutes the language model with a Granite 165M LLM. Try out our Granite-Docling-258 demo today.
+
+Developed by: IBM Research
+Model type: Multi-modal model (image+text-to-text)
+Language(s): English (NLP)
+License: Apache 2.0
+Release Date: September 17, 2025
+Granite-docling-258M is fully integrated into the Docling pipelines, carrying over existing features while introducing a number of powerful new features, including:
+
+🔢 Enhanced Equation Recognition: More accurate detection and formatting of mathematical formulas
+🧩 Flexible Inference Modes: Choose between full-page inference, bbox-guided region inference
+🧘 Improved Stability: Tends to avoid infinite loops more effectively
+🧮 Enhanced Inline Equations: Better inline math recognition
+🧾 Document Element QA: Answer questions about a document’s structure such as the presence and order of document elements
+🌍 Japanese, Arabic and Chinese support (experimental)
+Getting started
+The easiest way to use this model is through the 🐥Docling library. It will automatically download this model and convert documents to various formats for you.
+
+Install the latest version of docling through pip, then use the following CLI command:
+
+# Convert to HTML and Markdown:
+docling --to html --to md --pipeline vlm --vlm-model granite_docling "https://arxiv.org/pdf/2501.17887" # accepts files, urls or directories
+
+# Convert to HTML including layout visualization:
+docling --to html_split_page --show-layout --pipeline vlm --vlm-model granite_docling "https://arxiv.org/pdf/2501.17887"
+
+GraniteDocling result in split page view
+
+You can also set this model up within the Docling SDK:
+Alternatively, you can use bare transformers, vllm, onnx or mlx-vlm to perform inference, and docling-core APIs to convert results to variety of output formats (md, html, etc.):
+
+📄 Single page image inference using plain 🤗 tranformers 🤖
+🚀 Fast Batch Inference with VLLM
+💻 Local inference on Apple Silicon with MLX: see here
+
+Intended Use
+Granite-Docling is designed to complement the Docling library, not replace it. It integrates as a component within larger Docling library, consolidating the functions of multiple single-purpose models into a single, compact VLM. However, Granite-Docling is not intended for general image understanding. For tasks focused solely on image-text input, we recommend using Granite Vision models, which are purpose-built and optimized for image-text processing.
+
+Evaluations
+A comprehensive discussion of evaluation methods and findings has already been presented in our previous publication [citation]. As this model is an update, we refer readers to that work for additional details. The evaluation can be performed using the docling-eval framework for the document related tasks, and lmms-eval for MMStar and OCRBench.
+
+Layout
+MAP ↑	F1 ↑	Precision ↑	Recall ↑
+smoldocling-256m-preview	0.23	0.85	0.9	0.84
+granite-docling-258m	0.27	0.86	0.92	0.88
+Full Page OCR
+Edit-distance ↓	F1 ↑	Precision ↑	Recall ↑	BLEU ↑	Meteor ↑
+smoldocling-256m-preview	0.48	0.80	0.89	0.79	0.58	0.67
+granite-docling-258m	0.45	0.84	0.91	0.83	0.65	0.72
+Code Recognition
+Edit-distance ↓	F1 ↑	Precision ↑	Recall ↑	BLEU ↑	Meteor ↑
+smoldocling-256m-preview	0.114	0.915	0.94	0.909	0.875	0.889
+granite-docling-258m	0.013	0.988	0.99	0.988	0.983	0.986
+Equation Recognition
+Edit-distance ↓	F1 ↑	Precision ↑	Recall ↑	BLEU ↑	Meteor ↑
+smoldocling-256m-preview	0.119	0.947	0.959	0.941	0.824	0.878
+granite-docling-258m	0.073	0.968	0.968	0.969	0.893	0.927
+Table Recognition (FinTabNet 150dpi)
+TEDS (structure) ↑	TEDS (w/content) ↑
+smoldocling-256m-preview	0.82	0.76
+granite-docling-258m	0.97	0.96
+Other Benchmarks
+MMStar ↑	OCRBench ↑
+smoldocling-256m-preview	0.17	338
+granite-docling-258m	0.30	500
+💻 Local inference on Apple Silicon with MLX: see here
+
+Supported Instructions
+Description	Instruction	Short Instruction
+Full conversion	Convert this page to docling.	-
+Chart	Convert chart to table.	<chart>
+Formula	Convert formula to LaTeX.	<formula>
+Code	Convert code to text.	<code>
+Table	Convert table to OTSL. (Lysak et al., 2023)	<otsl>
+Actions and Pipelines	OCR the text in a specific location: <loc_155><loc_233><loc_206><loc_237>	-
+Identify element at: <loc_247><loc_482><loc_252><loc_486>	-
+Find all 'text' elements on the page, retrieve all section headers.	-
+Detect footer elements on the page.	-
+Model Architecture:
+The architecture of granite-docling-258m consists of the following components:
+
+(1) Vision encoder: siglip2-base-patch16-512.
+
+(2) Vision-language connector: pixel shuffle projector (as in idefics3)
+
+(3) Large language model: Granite 165M.
+
+We built upon Idefics3 to train our model. We incorporated DocTags into our LLM’s supervised fine-tuning (SFT) data to help the model become familiar with the format, enabling faster convergence and mitigating issues previously observed with SmolDocling. The model was trained using the nanoVLM framework, which provides a lightweight and efficient training setup for vision-language models
+
+Training Data: Our training corpus consists of two principal sources: (1) publicly available datasets and (2) internally constructed synthetic datasets designed to elicit specific document understanding capabilities.
+
+In particular, we incorporate:
+
+SynthCodeNet — a large-scale collection of synthetically rendered code snippets spanning over 50 programming languages
+SynthFormulaNet — a dataset of synthetic mathematical expressions paired with ground-truth LaTeX representations
+SynthChartNet — synthetic chart images annotated with structured table outputs
+DoclingMatix — a curated corpus of real-world document pages sampled from diverse domains
+Infrastructure: We train granite-docling-258m using IBM's super computing cluster, Blue Vela, which is outfitted with NVIDIA H100 GPUs. This cluster provides a scalable and efficient infrastructure for training our models over thousands of GPUs.
+
+Responsible Use and Limitations Some use cases for Vision Language Models can trigger certain risks and ethical considerations, including but not limited to: bias and fairness, misinformation, and autonomous decision-making. Although our alignment processes include safety considerations, the model may in some cases produce inaccurate, biased, offensive or unwanted responses to user prompts. Additionally, whether smaller models may exhibit increased susceptibility to hallucination in generation scenarios due to their reduced sizes, which could limit their ability to generate coherent and contextually accurate responses, remains uncertain. This aspect is currently an active area of research, and we anticipate more rigorous exploration, comprehension, and mitigations in this domain. We urge the community to use granite-docling-258m in a responsible way and avoid any malicious utilization. We recommend using this model only as part of the Docling library. More general vision tasks may pose higher inherent risks of triggering unwanted output. To enhance safety, we recommend using granite-docling-258m alongside Granite Guardian. Granite Guardian is a fine-tuned instruct model designed to detect and flag risks in prompts and responses across key dimensions outlined in the IBM AI Risk Atlas. Its training, which includes both human-annotated and synthetic data informed by internal red-teaming, enables it to outperform similar open-source models on standard benchmarks, providing an additional layer of safety.
+
+Resources
+
+⭐️ Learn about the latest updates with Docling: https://docling-project.github.io/docling/#features
+🚀 Get started with Docling concepts, integrations and tutorials: https://docling-project.github.io/docling/getting_started/
+💡 Learn about the latest Granite learning resources: https://ibm.biz/granite-learning-resources
+🖥️ Learn more about how to use Granite-Docling, explore the Docling library, and see what’s coming next for Docling in the release blog: https://ibm.com/new/announcements/granite-docling-end-to-end-document-conversion
