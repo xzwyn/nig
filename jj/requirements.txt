@@ -1,14 +1,5 @@
 streamlit
-ollama
-
-pymupdf
-pytesseract
-Pillow
-
-sentence-transformers
-numpy
-scikit-learn
-scipy
-
 pandas
 openpyxl
+unstructured[all]
+python-magic-bin==0.4.14
