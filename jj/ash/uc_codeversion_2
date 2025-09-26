@@ -1,0 +1,180 @@
+import pdfplumber
+import re
+from sentence_transformers import SentenceTransformer, util
+
+# ===========================
+# STEP 1 - Extract text from PDF
+# ===========================
+def extract_paragraphs(pdf_path):
+    """
+    Extracts text from a PDF file and splits into paragraphs.
+    Splitting heuristic: double newline or layout breaks.
+    """
+    paragraphs = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                # Split on double newlines or big gaps
+                parts = [p.strip() for p in text.split("\n\n") if p.strip()]
+                paragraphs.extend(parts)
+    return paragraphs
+
+
+# ===========================
+# STEP 2 - Detect headings
+# ===========================
+def is_heading(text):
+    """
+    Heuristic rules to detect if a paragraph is likely a heading.
+    - Very short (few words)
+    - All caps or section numbering
+    """
+    if len(text.split()) <= 8:
+        return True
+    if re.match(r"^[A-Z0-9 _.\-]+$", text):
+        return True
+    return False
+
+
+def tag_structure(paragraphs):
+    """
+    Tags each paragraph as either 'heading' or 'paragraph'
+    for further alignment.
+    """
+    structure = []
+    for para in paragraphs:
+        if is_heading(para):
+            structure.append({"type": "heading", "text": para})
+        else:
+            structure.append({"type": "paragraph", "text": para})
+    return structure
+
+
+# ===========================
+# STEP 3 - Align headings (English ↔ German)
+# ===========================
+def align_headings(eng_struct, ger_struct, model):
+    """
+    Uses multilingual embeddings to align English and German headings.
+    Returns a dict of best matches with similarity scores.
+    """
+    eng_headings = [x["text"] for x in eng_struct if x["type"] == "heading"]
+    ger_headings = [x["text"] for x in ger_struct if x["type"] == "heading"]
+
+    # Encode embeddings
+    eng_emb = model.encode(eng_headings, convert_to_tensor=True)
+    ger_emb = model.encode(ger_headings, convert_to_tensor=True)
+
+    # Cosine similarity
+    cosine_scores = util.cos_sim(eng_emb, ger_emb)
+
+    # Pick best German match for each English heading
+    alignments = {}
+    for i, eng_h in enumerate(eng_headings):
+        best_j = int(cosine_scores[i].argmax())
+        score = float(cosine_scores[i][best_j])
+        alignments[eng_h] = {"german": ger_headings[best_j], "score": score}
+
+    return alignments
+
+
+# ===========================
+# STEP 4 - Group paragraphs under headings
+# ===========================
+def group_by_sections(structure):
+    """
+    Groups paragraphs under their latest heading.
+    Returns a dict: heading -> [paragraphs...]
+    """
+    grouped = {}
+    current_heading = "INTRODUCTION"
+    grouped[current_heading] = []
+
+    for item in structure:
+        if item["type"] == "heading":
+            current_heading = item["text"]
+            grouped[current_heading] = []
+        else:
+            grouped[current_heading].append(item["text"])
+
+    return grouped
+
+
+# ===========================
+# STEP 5 - Compare paragraphs inside aligned sections
+# ===========================
+def compare_paragraphs(eng_grouped, ger_grouped, heading_matches, model, threshold=0.65):
+    """
+    Compares paragraphs inside aligned sections using embeddings.
+    Flags pairs with low similarity (potential mistranslations/omissions).
+    """
+    issues = []
+
+    for eng_h, match in heading_matches.items():
+        ger_h = match["german"]
+
+        eng_paras = eng_grouped.get(eng_h, [])
+        ger_paras = ger_grouped.get(ger_h, [])
+
+        if not eng_paras or not ger_paras:
+            continue
+
+        # Encode embeddings
+        eng_emb = model.encode(eng_paras, convert_to_tensor=True)
+        ger_emb = model.encode(ger_paras, convert_to_tensor=True)
+
+        sim_matrix = util.cos_sim(eng_emb, ger_emb)
+
+        for i, eng_p in enumerate(eng_paras):
+            best_j = int(sim_matrix[i].argmax())
+            score = float(sim_matrix[i][best_j])
+            if score < threshold:  # low similarity => potential issue
+                issues.append({
+                    "section_en": eng_h,
+                    "para_en": eng_p,
+                    "para_de": ger_paras[best_j],
+                    "similarity": score
+                })
+
+    return issues
+
+
+# ===========================
+# MAIN EXECUTION
+# ===========================
+if __name__ == "__main__":
+    # Paths to your PDFs (replace with your filenames)
+    english_pdf = "test_1_e.pdf"
+    german_pdf = "test_1_g.pdf"
+
+    # Load multilingual embedding model
+    model = SentenceTransformer("distiluse-base-multilingual-cased-v2")
+
+    # 1. Extract paragraphs
+    english_paras = extract_paragraphs(english_pdf)
+    german_paras = extract_paragraphs(german_pdf)
+
+    # 2. Tag structure
+    english_struct = tag_structure(english_paras)
+    german_struct = tag_structure(german_paras)
+
+    # 3. Align headings
+    heading_matches = align_headings(english_struct, german_struct, model)
+    print("\n--- HEADING ALIGNMENTS ---")
+    for eng, match in heading_matches.items():
+        print(f"[EN] {eng}\n[DE] {match['german']} (score={match['score']:.2f})\n")
+
+    # 4. Group paragraphs under headings
+    eng_grouped = group_by_sections(english_struct)
+    ger_grouped = group_by_sections(german_struct)
+
+    # 5. Compare paragraphs inside aligned sections
+    issues = compare_paragraphs(eng_grouped, ger_grouped, heading_matches, model)
+
+    print("\n--- POTENTIAL ISSUES (low similarity) ---")
+    for issue in issues[:5]:  # show first 5 issues
+        print(f"\nSection: {issue['section_en']}")
+        print(f"EN: {issue['para_en']}")
+        print(f"DE: {issue['para_de']}")
+        print(f"Similarity: {issue['similarity']:.2f}")
