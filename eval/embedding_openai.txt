@@ -1,0 +1,58 @@
+1. Authentication using API Key
+For OpenAI API Endpoints, deploy the Model to generate the endpoint URL and an API key to authenticate against the service. In this sample endpoint and key are strings holding the endpoint URL and the API Key.
+
+The API endpoint URL and API key can be found on the Deployments + Endpoint page once the model is deployed.
+
+To create a client with the OpenAI SDK using an API key, initialize the client by passing your API key to the SDK's configuration. This allows you to authenticate and interact with OpenAI's services seamlessly:
+
+endpoint = "https://translation-evaluation-openai.openai.azure.com/"
+model_name = "text-embedding-3-large"
+deployment = "text-embedding-3-large"
+
+api_version = "2024-02-01"
+
+client = AzureOpenAI(
+    api_version="2024-12-01-preview",
+    endpoint=endpoint,
+    credential=AzureKeyCredential("<API_KEY>")
+)
+
+2. Install dependencies
+Install the Azure OpenAI SDK using pip (Requires: Python >=3.8):
+
+pip install openai
+
+3. Run a basic code sample
+This sample demonstrates a call to embeddings API.
+
+It is leveraging the Azure AI model inference endpoint and your AAD token. The call is synchronous.
+
+import os
+from openai import AzureOpenAI
+
+endpoint = "https://translation-evaluation-openai.openai.azure.com/"
+model_name = "text-embedding-3-large"
+deployment = "text-embedding-3-large"
+
+api_version = "2024-02-01"
+
+client = AzureOpenAI(
+    api_version="2024-12-01-preview",
+    endpoint=endpoint,
+    credential=AzureKeyCredential("<API_KEY>")
+)
+
+response = client.embeddings.create(
+    input=["first phrase","second phrase","third phrase"],
+    model=deployment
+)
+
+for item in response.data:
+    length = len(item.embedding)
+    print(
+        f"data[{item.index}]: length={length}, "
+        f"[{item.embedding[0]}, {item.embedding[1]}, "
+        f"..., {item.embedding[length-2]}, {item.embedding[length-1]}]"
+    )
+print(response.usage)
+
