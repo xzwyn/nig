@@ -1,251 +1,48 @@
-# test_1/src/alignment/semantic_aligner.py
-from typing import List, Dict, Any
-from pathlib import Path
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-from openai import AzureOpenAI
-from tqdm import tqdm
-from scipy.optimize import linear_sum_assignment
+streamlit run app.py
 
-import config
-from src.reporting.excel_writer import save_calculation_report
-# Import the new section batching function
-from src.processing.section_parser import create_section_batches
+  You can now view your Streamlit app in your browser.
 
-# Type Aliases for clarity
-ContentItem = Dict[str, Any]
-AlignedPair = Dict[str, Any]
-SectionBatch = List[ContentItem]
+  Local URL: http://localhost:8501
+  Network URL: http://192.168.1.7:8501
 
-# A reusable client instance
-_client = None
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\e
+  xec_code.py:128 in exec_func_with_error_handling
 
-def _get_azure_client() -> AzureOpenAI:
-    """Initializes and returns a reusable AzureOpenAI client."""
-    global _client
-    if _client is None:
-        print("Initializing Azure OpenAI client...")
-        if not all([config.AZURE_EMBEDDING_ENDPOINT, config.AZURE_EMBEDDING_API_KEY]):
-            raise ValueError("Azure credentials (endpoint, key) are not set in the config/.env file.")
+  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\s
+  cript_runner.py:669 in code_to_exec
 
-        _client = AzureOpenAI(
-            api_version=config.AZURE_API_VERSION,
-            azure_endpoint=config.AZURE_EMBEDDING_ENDPOINT,
-            api_key=config.AZURE_EMBEDDING_API_KEY,
-        )
-    return _client
+  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\app.py:14 in <module>
 
-def _get_embeddings_in_batches(
-    texts: List[str],
-    content_items: List[ContentItem],
-    client: AzureOpenAI,
-    batch_size: int = 16,
-    context_window: int = 0
-) -> np.ndarray:
-    """
-    Generates embeddings by sending texts to the Azure API in batches.
-    Optionally includes context from surrounding segments.
-    """
-    # Generate texts with context if context_window > 0
-    if context_window > 0:
-        texts_with_context = []
-        for i, text in enumerate(texts):
-            # Get preceding context
-            pre_context = ""
-            for j in range(max(0, i - context_window), i):
-                pre_context += f"{content_items[j]['text']} "
+     11 import config
+     12 from src.clients.doc_intelligence_client import analyze_pdf
+     13 from src.processing.json_parser import process_document_json
+  ❱  14 from src.alignment.semantic_aligner import align_content
+     15 from src.evaluation.pipeline import run_evaluation_pipeline
+     16 from src.reporting.excel_writer import create_excel_report_in_memory, save_ali
+     17 from src.reporting.markdown_writer import save_to_markdown
 
-            # Get following context
-            post_context = ""
-            for j in range(i + 1, min(len(texts), i + context_window + 1)):
-                post_context += f" {content_items[j]['text']}"
+  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\src\alignment\semantic_aligner.py:13 in
+  <module>
 
-            # Include content type and page number for additional context
-            content_type = content_items[i]['type']
-            page_num = content_items[i]['page']
+     10 import config
+     11 from src.reporting.excel_writer import save_calculation_report
+     12 # Import the new section batching function
+  ❱  13 from src.processing.section_parser import create_section_batches
+     14 
+     15 # Type Aliases for clarity
+     16 ContentItem = Dict[str, Any]
 
-            # Create context-enhanced text
-            if pre_context or post_context:
-                context_text = f"{pre_context}[SEP]{text}[SEP]{post_context} [TYPE:{content_type}] [PAGE:{page_num}]"
-            else:
-                context_text = f"{text} [TYPE:{content_type}] [PAGE:{page_num}]"
+  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\src\processing\section_parser.py:9 in
+  <module>
 
-            texts_with_context.append(context_text)
-
-        # Use the context-enhanced texts
-        texts_to_embed = texts_with_context
-    else:
-        # Use original texts
-        texts_to_embed = texts
-
-    # Generate embeddings in batches
-    all_embeddings = []
-    # Note: Disabling tqdm here as it can get messy in a loop. A single progress bar in the main loop is better.
-    for i in range(0, len(texts_to_embed), batch_size):
-        batch = texts_to_embed[i:i + batch_size]
-        if not batch: continue
-        try:
-            response = client.embeddings.create(
-                input=batch,
-                model=config.AZURE_EMBEDDING_DEPLOYMENT_NAME
-            )
-            batch_embeddings = [item.embedding for item in response.data]
-            all_embeddings.extend(batch_embeddings)
-        except Exception as e:
-            print(f"An error occurred while processing a batch: {e}")
-            # Add placeholder embeddings for the failed batch to avoid size mismatch
-            all_embeddings.extend([[0.0] * 3072] * len(batch))  # text-embedding-3-large has 3072 dimensions
-
-    return np.array(all_embeddings)
-
-def _calculate_type_matrix(eng_content: List[ContentItem], ger_content: List[ContentItem]) -> np.ndarray:
-    num_eng = len(eng_content)
-    num_ger = len(ger_content)
-    type_matrix = np.zeros((num_eng, num_ger))
-
-    for i in range(num_eng):
-        for j in range(num_ger):
-            if eng_content[i]['type'] == ger_content[j]['type']:
-                type_matrix[i, j] = config.TYPE_MATCH_BONUS
-            else:
-                type_matrix[i, j] = config.TYPE_MISMATCH_PENALTY
-    return type_matrix
-
-def _calculate_proximity_matrix(num_eng: int, num_ger: int) -> np.ndarray:
-    proximity_matrix = np.zeros((num_eng, num_ger))
-    for i in range(num_eng):
-        for j in range(num_ger):
-            norm_pos_eng = i / num_eng if num_eng > 0 else 0
-            norm_pos_ger = j / num_ger if num_ger > 0 else 0
-            proximity_matrix[i, j] = 1.0 - abs(norm_pos_eng - norm_pos_ger)
-    return proximity_matrix
-
-def _align_batch(
-    english_batch: SectionBatch,
-    german_batch: SectionBatch,
-    client: AzureOpenAI,
-    context_window: int
-) -> List[AlignedPair]:
-    """
-    Performs alignment on a single batch of content using the Hungarian algorithm.
-    """
-    if not english_batch or not german_batch:
-        # Handle batches where one side is empty
-        aligned_pairs = []
-        for item in english_batch:
-            aligned_pairs.append({"english": item, "german": None, "similarity": 0.0})
-        for item in german_batch:
-            aligned_pairs.append({"english": None, "german": item, "similarity": 0.0})
-        return aligned_pairs
-
-    num_eng, num_ger = len(english_batch), len(german_batch)
-    eng_texts = [item['text'] for item in english_batch]
-    ger_texts = [item['text'] for item in german_batch]
-
-    english_embeddings = _get_embeddings_in_batches(eng_texts, english_batch, client, context_window=context_window)
-    german_embeddings = _get_embeddings_in_batches(ger_texts, german_batch, client, context_window=context_window)
-
-    semantic_matrix = cosine_similarity(english_embeddings, german_embeddings)
-    type_matrix = _calculate_type_matrix(english_batch, german_batch)
-    proximity_matrix = _calculate_proximity_matrix(num_eng, num_ger)
-
-    blended_matrix = (
-        (config.W_SEMANTIC * semantic_matrix) +
-        (config.W_TYPE * type_matrix) +
-        (config.W_PROXIMITY * proximity_matrix)
-    )
-
-    cost_matrix = -blended_matrix
-    row_indices, col_indices = linear_sum_assignment(cost_matrix)
-
-    batch_aligned_pairs: List[AlignedPair] = []
-    used_ger_indices = set()
-    used_eng_indices = set()
-
-    for eng_idx, ger_idx in zip(row_indices, col_indices):
-        score = blended_matrix[eng_idx, ger_idx]
-        if score >= config.SIMILARITY_THRESHOLD:
-            semantic_score = semantic_matrix[eng_idx, ger_idx]
-            batch_aligned_pairs.append({
-                "english": english_batch[eng_idx],
-                "german": german_batch[ger_idx],
-                "similarity": float(semantic_score)
-            })
-            used_eng_indices.add(eng_idx)
-            used_ger_indices.add(ger_idx)
-
-    # Add unmatched items from this batch
-    for i, item in enumerate(english_batch):
-        if i not in used_eng_indices:
-            batch_aligned_pairs.append({"english": item, "german": None, "similarity": 0.0})
-    for i, item in enumerate(german_batch):
-        if i not in used_ger_indices:
-            batch_aligned_pairs.append({"english": None, "german": item, "similarity": 0.0})
-
-    return batch_aligned_pairs
-
-
-def align_content(
-    english_content: List[ContentItem],
-    german_content: List[ContentItem],
-    context_window: int = 0,
-    generate_debug_report: bool = False,
-    debug_report_path: Path = None
-) -> List[AlignedPair]:
-    """
-    Aligns content between documents by breaking them into sections, aligning
-    each section locally, and then combining the results.
-    """
-    if not english_content or not german_content:
-        return []
-    
-    # --- Step 1: Create Section Batches ---
-    section_batches, _, _ = create_section_batches(english_content, german_content)
-
-    client = _get_azure_client()
-    all_aligned_pairs: List[AlignedPair] = []
-
-    # --- Step 2: Align Each Batch Locally ---
-    print("Aligning content within each section batch...")
-    for eng_batch, ger_batch in tqdm(section_batches, desc="Aligning Batches"):
-        batch_pairs = _align_batch(
-            english_batch=eng_batch,
-            german_batch=ger_batch,
-            client=client,
-            context_window=context_window
-        )
-        all_aligned_pairs.extend(batch_pairs)
-
-    # --- Step 3: Generate Optional Debug Report (uses original full lists) ---
-    # This report is now more of a holistic overview. The section-by-section
-    # logic is handled above. For a true debug, one would log each batch's matrices.
-    if generate_debug_report and debug_report_path:
-        print("Generating detailed calculation overview report for debugging...")
-        # Note: This debug report shows the *potential* global best match, which may differ
-        # from the batch-local match. This can be useful for analysis.
-        eng_texts = [item['text'] for item in english_content]
-        ger_texts = [item['text'] for item in german_content]
-        english_embeddings = _get_embeddings_in_batches(eng_texts, english_content, client, context_window=context_window)
-        german_embeddings = _get_embeddings_in_batches(ger_texts, german_content, client, context_window=context_window)
-        semantic_matrix = cosine_similarity(english_embeddings, german_embeddings)
-        type_matrix = _calculate_type_matrix(english_content, german_content)
-        proximity_matrix = _calculate_proximity_matrix(len(english_content), len(german_content))
-        blended_matrix = (
-            (config.W_SEMANTIC * semantic_matrix) +
-            (config.W_TYPE * type_matrix) +
-            (config.W_PROXIMITY * proximity_matrix)
-        )
-        save_calculation_report(
-            english_content=english_content,
-            german_content=german_content,
-            blended_matrix=blended_matrix,
-            semantic_matrix=semantic_matrix,
-            type_matrix=type_matrix,
-            proximity_matrix=proximity_matrix,
-            filepath=debug_report_path
-        )
-
-    # --- Step 4: Final Sort and Return ---
-    all_aligned_pairs.sort(key=lambda x: x['english']['page'] if x.get('english') else (x['german']['page'] if x.get('german') else float('inf')))
-
-    return all_aligned_pairs
+      6 from openai import AzureOpenAI
+      7 
+      8 import config
+  ❱   9 from src.alignment.semantic_aligner import _get_azure_client, _get_embeddings_
+     10 
+     11 # A helper type alias
+     12 SectionBatch = List[ContentItem]
+────────────────────────────────────────────────────────────────────────────────────────
+ImportError: cannot import name '_get_azure_client' from partially initialized module
+'src.alignment.semantic_aligner' (most likely due to a circular import)
