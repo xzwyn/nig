@@ -1,48 +1,452 @@
-streamlit run app.py
+# test_1/src/clients/azure_client.py
+import os
+from typing import List, Dict, Any, Optional
+import numpy as np
+from openai import AzureOpenAI
+from dotenv import load_dotenv
+from tqdm import tqdm
 
-  You can now view your Streamlit app in your browser.
+load_dotenv()
 
-  Local URL: http://localhost:8501
-  Network URL: http://192.168.1.7:8501
+_chat_client: Optional[AzureOpenAI] = None
+_embedding_client: Optional[AzureOpenAI] = None
 
-────────────────────────── Traceback (most recent call last) ───────────────────────────
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\e
-  xec_code.py:128 in exec_func_with_error_handling
+# Type Alias from your other files for consistency
+ContentItem = Dict[str, Any]
 
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\s
-  cript_runner.py:669 in code_to_exec
+_cfg = {
+    "chat_endpoint": None,
+    "chat_api_key": None,
+    "chat_api_version": None,
+    "chat_deployment": None,
+    "embedding_endpoint": None,
+    "embedding_api_key": None,
+    "embedding_api_version": None,
+    "embedding_deployment": None,
+}
 
-  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\app.py:14 in <module>
+def _load_env():
+    # Chat configuration
+    _cfg["chat_endpoint"] = os.getenv("AZURE_OPENAI_ENDPOINT")
+    _cfg["chat_api_key"] = os.getenv("AZURE_OPENAI_API_KEY")
+    _cfg["chat_api_version"] = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+    _cfg["chat_deployment"] = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
-     11 import config
-     12 from src.clients.doc_intelligence_client import analyze_pdf
-     13 from src.processing.json_parser import process_document_json
-  ❱  14 from src.alignment.semantic_aligner import align_content
-     15 from src.evaluation.pipeline import run_evaluation_pipeline
-     16 from src.reporting.excel_writer import create_excel_report_in_memory, save_ali
-     17 from src.reporting.markdown_writer import save_to_markdown
+    # Embedding configuration
+    _cfg["embedding_endpoint"] = os.getenv("AZURE_EMBEDDING_ENDPOINT")
+    _cfg["embedding_api_key"] = os.getenv("AZURE_EMBEDDING_API_KEY")
+    _cfg["embedding_api_version"] = os.getenv("AZURE_API_VERSION", "2024-02-01")
+    _cfg["embedding_deployment"] = os.getenv("AZURE_EMBEDDING_DEPLOYMENT_NAME")
 
-  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\src\alignment\semantic_aligner.py:13 in
-  <module>
+def _get_chat_client() -> AzureOpenAI:
+    global _chat_client
+    if _chat_client is not None:
+        return _chat_client
 
-     10 import config
-     11 from src.reporting.excel_writer import save_calculation_report
-     12 # Import the new section batching function
-  ❱  13 from src.processing.section_parser import create_section_batches
-     14 
-     15 # Type Aliases for clarity
-     16 ContentItem = Dict[str, Any]
+    _load_env()
+    if not _cfg["chat_endpoint"] or not _cfg["chat_api_key"] or not _cfg["chat_deployment"]:
+        raise RuntimeError(
+            "Azure OpenAI chat client is not configured. "
+            "Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, and AZURE_OPENAI_DEPLOYMENT in your .env file."
+        )
 
-  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\src\processing\section_parser.py:9 in
-  <module>
+    _chat_client = AzureOpenAI(
+        azure_endpoint=_cfg["chat_endpoint"],
+        api_key=_cfg["chat_api_key"],
+        api_version=_cfg["chat_api_version"],
+    )
+    return _chat_client
 
-      6 from openai import AzureOpenAI
-      7 
-      8 import config
-  ❱   9 from src.alignment.semantic_aligner import _get_azure_client, _get_embeddings_
-     10 
-     11 # A helper type alias
-     12 SectionBatch = List[ContentItem]
-────────────────────────────────────────────────────────────────────────────────────────
-ImportError: cannot import name '_get_azure_client' from partially initialized module
-'src.alignment.semantic_aligner' (most likely due to a circular import)
+def _get_embedding_client() -> AzureOpenAI:
+    global _embedding_client
+    if _embedding_client is not None:
+        return _embedding_client
+
+    print("Initializing Azure OpenAI client for embeddings...")
+    _load_env()
+    if not _cfg["embedding_endpoint"] or not _cfg["embedding_api_key"] or not _cfg["embedding_deployment"]:
+        raise RuntimeError(
+            "Azure OpenAI embedding client is not configured. "
+            "Set AZURE_EMBEDDING_ENDPOINT, AZURE_EMBEDDING_API_KEY, and AZURE_EMBEDDING_DEPLOYMENT_NAME in your .env file."
+        )
+
+    _embedding_client = AzureOpenAI(
+        azure_endpoint=_cfg["embedding_endpoint"],
+        api_key=_cfg["embedding_api_key"],
+        api_version=_cfg["embedding_api_version"] or _cfg["chat_api_version"],
+    )
+    return _embedding_client
+
+def chat(messages: List[Dict[str, Any]], temperature: float = 0.1, model: Optional[str] = None) -> str:
+    client = _get_chat_client()
+    deployment = model or _cfg["chat_deployment"]
+
+    resp = client.chat.completions.create(
+        model=deployment,
+        messages=messages,
+        temperature=temperature,
+    )
+    return resp.choices[0].message.content or ""
+
+def get_embeddings(texts: List[str], model: Optional[str]=None) -> List[List[float]]:
+    # This is the old, simpler function. We'll leave it in case other parts of the system use it.
+    client = _get_embedding_client()
+    deployment = model or _cfg['embedding_deployment']
+
+    if not deployment:
+        raise ValueError("No embedding deployment specified. Please set AZURE_EMBEDDING_DEPLOYMENT_NAME in your .env file.")
+
+    response = client.embeddings.create(
+        input=texts,
+        model=deployment
+    )
+    return [item.embedding for item in response.data]
+
+# NEW: The advanced embedding function, moved from semantic_aligner.py
+def get_embeddings_in_batches(
+    texts: List[str],
+    content_items: List[ContentItem],
+    batch_size: int = 16,
+    context_window: int = 0
+) -> np.ndarray:
+    """
+    Generates embeddings by sending texts to the Azure API in batches.
+    Optionally includes context from surrounding segments.
+    """
+    client = _get_embedding_client()
+    deployment = _cfg['embedding_deployment']
+    
+    # Generate texts with context if context_window > 0
+    if context_window > 0:
+        texts_with_context = []
+        for i, text in enumerate(texts):
+            pre_context = ""
+            for j in range(max(0, i - context_window), i):
+                pre_context += f"{content_items[j]['text']} "
+
+            post_context = ""
+            for j in range(i + 1, min(len(texts), i + context_window + 1)):
+                post_context += f" {content_items[j]['text']}"
+
+            content_type = content_items[i]['type']
+            page_num = content_items[i]['page']
+
+            if pre_context or post_context:
+                context_text = f"{pre_context}[SEP]{text}[SEP]{post_context} [TYPE:{content_type}] [PAGE:{page_num}]"
+            else:
+                context_text = f"{text} [TYPE:{content_type}] [PAGE:{page_num}]"
+            texts_with_context.append(context_text)
+        texts_to_embed = texts_with_context
+    else:
+        texts_to_embed = texts
+
+    # Generate embeddings in batches
+    all_embeddings = []
+    # Use tqdm here for progress bars during long operations
+    for i in tqdm(range(0, len(texts_to_embed), batch_size), desc="Generating Embeddings"):
+        batch = texts_to_embed[i:i + batch_size]
+        if not batch: continue
+        try:
+            response = client.embeddings.create(
+                input=batch,
+                model=deployment
+            )
+            batch_embeddings = [item.embedding for item in response.data]
+            all_embeddings.extend(batch_embeddings)
+        except Exception as e:
+            print(f"An error occurred while processing a batch: {e}")
+            all_embeddings.extend([[0.0] * 3072] * len(batch))
+
+    return np.array(all_embeddings)
+
+
+
+
+
+
+
+
+# test_1/src/processing/section_parser.py
+
+from typing import List, Dict, Any, Tuple
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
+import config
+# FIXED: Import from the central client, NOT from semantic_aligner
+from src.clients.azure_client import get_embeddings_in_batches, ContentItem
+
+# A helper type alias
+SectionBatch = List[ContentItem]
+
+def _identify_and_align_sections(
+    eng_content: List[ContentItem],
+    ger_content: List[ContentItem]
+) -> List[Tuple[ContentItem, ContentItem]]:
+    """
+    Identifies section headings in both documents, gets their embeddings,
+    and aligns them based on semantic similarity.
+    """
+    eng_headings = [item for item in eng_content if item['type'] in config.STRUCTURAL_ROLES]
+    ger_headings = [item for item in ger_content if item['type'] in config.STRUCTURAL_ROLES]
+
+    if not eng_headings or not ger_headings:
+        return []
+
+    # Get embeddings for the heading texts
+    eng_heading_embeddings = get_embeddings_in_batches([h['text'] for h in eng_headings], eng_headings, context_window=0)
+    ger_heading_embeddings = get_embeddings_in_batches([h['text'] for h in ger_headings], ger_headings, context_window=0)
+
+    # Calculate similarity and find best matches
+    similarity_matrix = cosine_similarity(eng_heading_embeddings, ger_heading_embeddings)
+
+    aligned_sections = []
+    used_ger_indices = set()
+
+    # Find the best German match for each English heading
+    for i, eng_heading in enumerate(eng_headings):
+        if similarity_matrix.shape[1] == 0: continue
+        best_match_idx = np.argmax(similarity_matrix[i])
+        score = similarity_matrix[i, best_match_idx]
+
+        if score > config.SIMILARITY_THRESHOLD and best_match_idx not in used_ger_indices:
+            aligned_sections.append((eng_heading, ger_headings[best_match_idx]))
+            used_ger_indices.add(best_match_idx)
+            similarity_matrix[:, best_match_idx] = -1
+
+    return aligned_sections
+
+def create_section_batches(
+    english_content: List[ContentItem],
+    german_content: List[ContentItem]
+) -> Tuple[List[Tuple[SectionBatch, SectionBatch]], SectionBatch, SectionBatch]:
+    """
+    Parses content lists into batches based on aligned structural roles (e.g., section headings).
+    """
+    print("Identifying and aligning document sections...")
+    aligned_headings = _identify_and_align_sections(english_content, german_content)
+
+    if not aligned_headings:
+        print("-> No sections found or aligned. Treating documents as a single batch.")
+        return [(english_content, german_content)], [], []
+
+    print(f"-> Found and aligned {len(aligned_headings)} sections.")
+    batched_pairs: List[Tuple[SectionBatch, SectionBatch]] = []
+    
+    eng_assigned_offsets = set()
+    ger_assigned_offsets = set()
+
+    for i, (eng_head, ger_head) in enumerate(aligned_headings):
+        eng_batch: SectionBatch = [eng_head]
+        ger_batch: SectionBatch = [ger_head]
+        
+        eng_head['section_title'] = eng_head['text']
+        ger_head['section_title'] = ger_head['text']
+
+        eng_assigned_offsets.add(eng_head['offset'])
+        ger_assigned_offsets.add(ger_head['offset'])
+
+        start_offset_eng = eng_head['offset']
+        end_offset_eng = aligned_headings[i + 1][0]['offset'] if i + 1 < len(aligned_headings) else float('inf')
+
+        for item in english_content:
+            if start_offset_eng < item['offset'] < end_offset_eng:
+                item['section_title'] = eng_head['text']
+                eng_batch.append(item)
+                eng_assigned_offsets.add(item['offset'])
+
+        start_offset_ger = ger_head['offset']
+        end_offset_ger = float('inf')
+        for next_eng, next_ger in aligned_headings[i + 1:]:
+            if next_ger['offset'] > start_offset_ger:
+                end_offset_ger = next_ger['offset']
+                break
+        
+        for item in german_content:
+            if start_offset_ger < item['offset'] < end_offset_ger:
+                item['section_title'] = ger_head['text']
+                ger_batch.append(item)
+                ger_assigned_offsets.add(item['offset'])
+
+        batched_pairs.append((eng_batch, ger_batch))
+
+    unassigned_eng = [item for item in english_content if item['offset'] not in eng_assigned_offsets]
+    unassigned_ger = [item for item in german_content if item['offset'] not in ger_assigned_offsets]
+    
+    if unassigned_eng or unassigned_ger:
+        for item in unassigned_eng: item['section_title'] = "Unassigned"
+        for item in unassigned_ger: item['section_title'] = "Unassigned"
+        batched_pairs.insert(0, (unassigned_eng, unassigned_ger))
+        print(f"-> Grouped {len(unassigned_eng)} English and {len(unassigned_ger)} German unassigned segments into a separate batch.")
+
+    return batched_pairs, unassigned_eng, unassigned_ger
+
+
+
+
+
+
+
+
+
+# test_1/src/alignment/semantic_aligner.py
+from typing import List, Dict, Any
+from pathlib import Path
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
+from scipy.optimize import linear_sum_assignment
+
+import config
+from src.reporting.excel_writer import save_calculation_report
+from src.processing.section_parser import create_section_batches
+# FIXED: Import the centralized embedding function
+from src.clients.azure_client import get_embeddings_in_batches
+
+# Type Aliases for clarity
+ContentItem = Dict[str, Any]
+AlignedPair = Dict[str, Any]
+SectionBatch = List[ContentItem]
+
+# REMOVED: No longer need a local client instance
+# _client = None
+
+# REMOVED: _get_azure_client() function is now in azure_client.py
+
+# REMOVED: _get_embeddings_in_batches() function is now in azure_client.py
+
+def _calculate_type_matrix(eng_content: List[ContentItem], ger_content: List[ContentItem]) -> np.ndarray:
+    num_eng = len(eng_content)
+    num_ger = len(ger_content)
+    type_matrix = np.zeros((num_eng, num_ger))
+
+    for i in range(num_eng):
+        for j in range(num_ger):
+            if eng_content[i]['type'] == ger_content[j]['type']:
+                type_matrix[i, j] = config.TYPE_MATCH_BONUS
+            else:
+                type_matrix[i, j] = config.TYPE_MISMATCH_PENALTY
+    return type_matrix
+
+def _calculate_proximity_matrix(num_eng: int, num_ger: int) -> np.ndarray:
+    proximity_matrix = np.zeros((num_eng, num_ger))
+    for i in range(num_eng):
+        for j in range(num_ger):
+            norm_pos_eng = i / num_eng if num_eng > 0 else 0
+            norm_pos_ger = j / num_ger if num_ger > 0 else 0
+            proximity_matrix[i, j] = 1.0 - abs(norm_pos_eng - norm_pos_ger)
+    return proximity_matrix
+
+def _align_batch(
+    english_batch: SectionBatch,
+    german_batch: SectionBatch,
+    context_window: int
+) -> List[AlignedPair]:
+    """
+    Performs alignment on a single batch of content using the Hungarian algorithm.
+    """
+    if not english_batch or not german_batch:
+        aligned_pairs = []
+        for item in english_batch:
+            aligned_pairs.append({"english": item, "german": None, "similarity": 0.0})
+        for item in german_batch:
+            aligned_pairs.append({"english": None, "german": item, "similarity": 0.0})
+        return aligned_pairs
+
+    num_eng, num_ger = len(english_batch), len(german_batch)
+    eng_texts = [item['text'] for item in english_batch]
+    ger_texts = [item['text'] for item in german_batch]
+
+    english_embeddings = get_embeddings_in_batches(eng_texts, english_batch, context_window=context_window)
+    german_embeddings = get_embeddings_in_batches(ger_texts, german_batch, context_window=context_window)
+
+    semantic_matrix = cosine_similarity(english_embeddings, german_embeddings)
+    type_matrix = _calculate_type_matrix(english_batch, german_batch)
+    proximity_matrix = _calculate_proximity_matrix(num_eng, num_ger)
+
+    blended_matrix = (
+        (config.W_SEMANTIC * semantic_matrix) +
+        (config.W_TYPE * type_matrix) +
+        (config.W_PROXIMITY * proximity_matrix)
+    )
+
+    cost_matrix = -blended_matrix
+    row_indices, col_indices = linear_sum_assignment(cost_matrix)
+
+    batch_aligned_pairs: List[AlignedPair] = []
+    used_ger_indices = set()
+    used_eng_indices = set()
+
+    for eng_idx, ger_idx in zip(row_indices, col_indices):
+        score = blended_matrix[eng_idx, ger_idx]
+        if score >= config.SIMILARITY_THRESHOLD:
+            semantic_score = semantic_matrix[eng_idx, ger_idx]
+            batch_aligned_pairs.append({
+                "english": english_batch[eng_idx],
+                "german": german_batch[ger_idx],
+                "similarity": float(semantic_score)
+            })
+            used_eng_indices.add(eng_idx)
+            used_ger_indices.add(ger_idx)
+
+    for i, item in enumerate(english_batch):
+        if i not in used_eng_indices:
+            batch_aligned_pairs.append({"english": item, "german": None, "similarity": 0.0})
+    for i, item in enumerate(german_batch):
+        if i not in used_ger_indices:
+            batch_aligned_pairs.append({"english": None, "german": item, "similarity": 0.0})
+
+    return batch_aligned_pairs
+
+def align_content(
+    english_content: List[ContentItem],
+    german_content: List[ContentItem],
+    context_window: int = 0,
+    generate_debug_report: bool = False,
+    debug_report_path: Path = None
+) -> List[AlignedPair]:
+    """
+    Aligns content between documents by breaking them into sections, aligning
+    each section locally, and then combining the results.
+    """
+    if not english_content or not german_content:
+        return []
+    
+    section_batches, _, _ = create_section_batches(english_content, german_content)
+    all_aligned_pairs: List[AlignedPair] = []
+
+    print("Aligning content within each section batch...")
+    for eng_batch, ger_batch in tqdm(section_batches, desc="Aligning Batches"):
+        batch_pairs = _align_batch(
+            english_batch=eng_batch,
+            german_batch=ger_batch,
+            context_window=context_window
+        )
+        all_aligned_pairs.extend(batch_pairs)
+
+    if generate_debug_report and debug_report_path:
+        print("Generating detailed calculation overview report for debugging...")
+        eng_texts = [item['text'] for item in english_content]
+        ger_texts = [item['text'] for item in german_content]
+        english_embeddings = get_embeddings_in_batches(eng_texts, english_content, context_window=context_window)
+        german_embeddings = get_embeddings_in_batches(ger_texts, german_content, context_window=context_window)
+        semantic_matrix = cosine_similarity(english_embeddings, german_embeddings)
+        type_matrix = _calculate_type_matrix(english_content, german_content)
+        proximity_matrix = _calculate_proximity_matrix(len(english_content), len(german_content))
+        blended_matrix = (
+            (config.W_SEMANTIC * semantic_matrix) +
+            (config.W_TYPE * type_matrix) +
+            (config.W_PROXIMITY * proximity_matrix)
+        )
+        save_calculation_report(
+            english_content=english_content,
+            german_content=german_content,
+            blended_matrix=blended_matrix,
+            semantic_matrix=semantic_matrix,
+            type_matrix=type_matrix,
+            proximity_matrix=proximity_matrix,
+            filepath=debug_report_path
+        )
+
+    all_aligned_pairs.sort(key=lambda x: x['english']['page'] if x.get('english') else (x['german']['page'] if x.get('german') else float('inf')))
+    return all_aligned_pairs
