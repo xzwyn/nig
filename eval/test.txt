@@ -1,9 +1,21 @@
-AZURE_OPENAI_ENDPOINT=https
-AZURE_OPENAI_API_KEY=   
-AZURE_OPENAI_API_VERSION=2025-01-01-preview
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
+# test_1/requirements.txt
+# Core application
+streamlit
+openai
+azure-core
+python-dotenv
+azure-ai-documentintelligence
 
-AZURE_EMBEDDING_ENDPOINT="https://-ai.openai.azure.com/"
-AZURE_EMBEDDING_API_KEY=""
-AZURE_EMBEDDING_DEPLOYMENT_NAME="text-embedding-3-large"
+# Libraries for data handling and calculations
+numpy
+scikit-learn
+tqdm
+
+# Libraries for dataframes and writing Excel files
+pandas
+openpyxl
+
+AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="YOUR_DOC_INTELLIGENCE_ENDPOINT_HERE"
+AZURE_DOCUMENT_INTELLIGENCE_KEY="YOUR_DOC_INTELLIGENCE_KEY_HERE"
+
 
