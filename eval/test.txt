@@ -1,13 +1,14 @@
 # test_1/src/alignment/semantic_aligner.py
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 from pathlib import Path
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import AzureOpenAI
 from tqdm import tqdm
-import faiss  # New import for efficient nearest neighbor search
+from scipy.optimize import linear_sum_assignment
 
 import config
+from src.reporting.excel_writer import save_calculation_report
 
 # Type Aliases for clarity
 ContentItem = Dict[str, Any]
@@ -42,104 +43,77 @@ def _get_embeddings_in_batches(
     Generates embeddings by sending texts to the Azure API in batches.
     Optionally includes context from surrounding segments.
     """
+    # Generate texts with context if context_window > 0
     if context_window > 0:
         texts_with_context = []
         for i, text in enumerate(texts):
-            pre_context = "".join([f"{content_items[j]['text']} " for j in range(max(0, i - context_window), i)])
-            post_context = "".join([f" {content_items[j]['text']}" for j in range(i + 1, min(len(texts), i + context_window + 1))])
+            # Get preceding context
+            pre_context = ""
+            for j in range(max(0, i - context_window), i):
+                pre_context += f"{content_items[j]['text']} "
+
+            # Get following context
+            post_context = ""
+            for j in range(i + 1, min(len(texts), i + context_window + 1)):
+                post_context += f" {content_items[j]['text']}"
+
+            # Include content type and page number for additional context
             content_type = content_items[i]['type']
             page_num = content_items[i]['page']
-            context_text = f"{pre_context}[SEP]{text}[SEP]{post_context} [TYPE:{content_type}] [PAGE:{page_num}]".strip()
+
+            # Create context-enhanced text
+            if pre_context or post_context:
+                context_text = f"{pre_context}[SEP]{text}[SEP]{post_context} [TYPE:{content_type}] [PAGE:{page_num}]"
+            else:
+                context_text = f"{text} [TYPE:{content_type}] [PAGE:{page_num}]"
+
             texts_with_context.append(context_text)
+
+        # Use the context-enhanced texts
         texts_to_embed = texts_with_context
     else:
+        # Use original texts
         texts_to_embed = texts
 
+    # Generate embeddings in batches
     all_embeddings = []
     for i in tqdm(range(0, len(texts_to_embed), batch_size), desc="Generating Embeddings"):
         batch = texts_to_embed[i:i + batch_size]
         try:
-            response = client.embeddings.create(input=batch, model=config.AZURE_EMBEDDING_DEPLOYMENT_NAME)
+            response = client.embeddings.create(
+                input=batch,
+                model=config.AZURE_EMBEDDING_DEPLOYMENT_NAME
+            )
             batch_embeddings = [item.embedding for item in response.data]
             all_embeddings.extend(batch_embeddings)
         except Exception as e:
             print(f"An error occurred while processing a batch: {e}")
-            all_embeddings.extend([[0.0] * 3072] * len(batch))
+            # Add placeholder embeddings for the failed batch to avoid size mismatch
+            all_embeddings.extend([[0.0] * 3072] * len(batch))  # text-embedding-3-large has 3072 dimensions
 
-    return np.array(all_embeddings, dtype='float32')
+    return np.array(all_embeddings)
 
+def _calculate_type_matrix(eng_content: List[ContentItem], ger_content: List[ContentItem]) -> np.ndarray:
+    num_eng = len(eng_content)
+    num_ger = len(ger_content)
+    type_matrix = np.zeros((num_eng, num_ger))
 
-def _calculate_margin_scores_and_matches(
-    source_embeds: np.ndarray,
-    target_embeds: np.ndarray,
-    k: int = 4
-) -> List[Tuple[int, int, float]]:
-    """
-    Calculates alignment scores using the margin method (CSLS-like) and returns the best 1-to-1 matches.
-    This replaces the simple cosine similarity matrix and the Hungarian algorithm.
-    """
-    # 1. Normalize embeddings for cosine similarity calculation
-    source_embeds = source_embeds / np.linalg.norm(source_embeds, axis=1, keepdims=True)
-    target_embeds = target_embeds / np.linalg.norm(target_embeds, axis=1, keepdims=True)
+    for i in range(num_eng):
+        for j in range(num_ger):
+            if eng_content[i]['type'] == ger_content[j]['type']:
+                type_matrix[i, j] = config.TYPE_MATCH_BONUS
+            else:
+                type_matrix[i, j] = config.TYPE_MISMATCH_PENALTY
+    return type_matrix
 
-    # 2. Find k-Nearest Neighbors (kNN) in both directions using FAISS
-    # Forward: English -> German
-    index_target = faiss.IndexFlatIP(target_embeds.shape[1])
-    index_target.add(target_embeds)
-    sim_fwd, ind_fwd = index_target.search(source_embeds, k)
-
-    # Backward: German -> English
-    index_source = faiss.IndexFlatIP(source_embeds.shape[1])
-    index_source.add(source_embeds)
-    sim_bwd, ind_bwd = index_source.search(target_embeds, k)
-
-    # 3. Calculate the margin score
-    mean_fwd_sim = sim_fwd.mean(axis=1)
-    mean_bwd_sim = sim_bwd.mean(axis=1)
-
-    # [cite_start]The margin is the ratio between the cosine distance and the average similarity of nearest neighbors. [cite: 665]
-    margin = lambda a, b: a / b
-    
-    scores_fwd = score_candidates(source_embeds, target_embeds, ind_fwd, mean_fwd_sim, mean_bwd_sim, margin)
-    scores_bwd = score_candidates(target_embeds, source_embeds, ind_bwd, mean_bwd_sim, mean_fwd_sim, margin)
-
-    # 4. Find the best matches based on the new scores
-    fwd_best_idx = ind_fwd[np.arange(source_embeds.shape[0]), scores_fwd.argmax(axis=1)]
-    bwd_best_idx = ind_bwd[np.arange(target_embeds.shape[0]), scores_bwd.argmax(axis=1)]
-
-    # 5. Combine and enforce 1-to-1 mapping
-    # [cite_start]This combines the best forward and backward candidates. [cite: 671]
-    potential_matches = []
-    fwd_scores_max = scores_fwd.max(axis=1)
-    for i in range(source_embeds.shape[0]):
-        potential_matches.append((i, fwd_best_idx[i], fwd_scores_max[i]))
-
-    bwd_scores_max = scores_bwd.max(axis=1)
-    for i in range(target_embeds.shape[0]):
-        potential_matches.append((bwd_best_idx[i], i, bwd_scores_max[i]))
-
-    potential_matches.sort(key=lambda x: x[2], reverse=True)
-
-    final_matches = []
-    seen_source = set()
-    seen_target = set()
-    for src_idx, trg_idx, score in potential_matches:
-        # [cite_start]Enforce strict 1-to-1 matching to prevent mispairings. [cite: 671]
-        if src_idx not in seen_source and trg_idx not in seen_target:
-            final_matches.append((src_idx, trg_idx, score))
-            seen_source.add(src_idx)
-            seen_target.add(trg_idx)
-
-    return final_matches
-    
-def score_candidates(x, y, ind, x_mean, y_mean, margin):
-    """Helper function to calculate margin scores for candidates."""
-    scores = np.zeros_like(ind, dtype=np.float32)
-    for i in range(x.shape[0]):
-        for j in range(ind.shape[1]):
-            scores[i, j] = margin(np.dot(x[i], y[ind[i, j]]), (x_mean[i] + y_mean[ind[i, j]]) / 2)
-    return scores
-
+def _calculate_proximity_matrix(num_eng: int, num_ger: int) -> np.ndarray:
+    proximity_matrix = np.zeros((num_eng, num_ger))
+    for i in range(num_eng):
+        for j in range(num_ger):
+            norm_pos_eng = i / num_eng if num_eng > 0 else 0
+            norm_pos_ger = j / num_ger if num_ger > 0 else 0
+            proximity_matrix[i, j] = 1.0 - abs(norm_pos_eng - norm_pos_ger)
+    return proximity_matrix
 
 def align_content(
     english_content: List[ContentItem],
@@ -149,59 +123,100 @@ def align_content(
     debug_report_path: Path = None
 ) -> List[AlignedPair]:
     """
-    Aligns content between English and German documents using margin-based scoring.
+    Aligns content between English and German documents using the Hungarian algorithm.
+
+    Args:
+        english_content: List of English content items
+        german_content: List of German content items
+        context_window: Size of context window (0 for no context)
+        generate_debug_report: Whether to generate a detailed calculation report
+        debug_report_path: Path to save the debug report
+
+    Returns:
+        List of aligned pairs
     """
     if not english_content or not german_content:
         return []
 
     client = _get_azure_client()
+    num_eng, num_ger = len(english_content), len(german_content)
 
-    # 1. Get embeddings
+    eng_texts = [item['text'] for item in english_content]
+    ger_texts = [item['text'] for item in german_content]
+
+    # Generate embeddings using the updated function with context support
     english_embeddings = _get_embeddings_in_batches(
-        [item['text'] for item in english_content], english_content, client, context_window=context_window
+        eng_texts,
+        english_content,
+        client,
+        context_window=context_window
     )
     german_embeddings = _get_embeddings_in_batches(
-        [item['text'] for item in german_content], german_content, client, context_window=context_window
+        ger_texts,
+        german_content,
+        client,
+        context_window=context_window
     )
 
-    # 2. Get the best 1-to-1 matches using the new margin-based method
-    print("Finding best 1-to-1 matches using margin-based scoring...")
-    best_matches = _calculate_margin_scores_and_matches(english_embeddings, german_embeddings)
-
+    print("Calculating score matrices (semantic, type, proximity)...")
     semantic_matrix = cosine_similarity(english_embeddings, german_embeddings)
+    type_matrix = _calculate_type_matrix(english_content, german_content)
+    proximity_matrix = _calculate_proximity_matrix(num_eng, num_ger)
 
-    # 3. Create the list of aligned pairs
+    blended_matrix = (
+        (config.W_SEMANTIC * semantic_matrix) +
+        (config.W_TYPE * type_matrix) +
+        (config.W_PROXIMITY * proximity_matrix)
+    )
+
+    if generate_debug_report and debug_report_path:
+        print("Generating detailed calculation report for debugging...")
+        save_calculation_report(
+            english_content=english_content,
+            german_content=german_content,
+            blended_matrix=blended_matrix,
+            semantic_matrix=semantic_matrix,
+            type_matrix=type_matrix,
+            proximity_matrix=proximity_matrix,
+            filepath=debug_report_path
+        )
+
     aligned_pairs: List[AlignedPair] = []
-    used_english_indices = set()
     used_german_indices = set()
 
-    for eng_idx, ger_idx, score in best_matches:
-        final_similarity_score = semantic_matrix[eng_idx, ger_idx]
-        
-        # [cite_start]We apply a threshold to the margin score to decide if sentences are mutual translations. [cite: 672]
-        # The Python script uses a threshold of 1.0, which is a good starting point.
-        if score >= 1.0 and final_similarity_score >= config.SIMILARITY_THRESHOLD:
+    print("Finding optimal global alignment using Hungarian algorithm...")
+    # Hungarian algorithm minimizes cost, so we negate the similarity scores
+    cost_matrix = -blended_matrix.copy()
+
+    # Find optimal assignment
+    row_indices, col_indices = linear_sum_assignment(cost_matrix)
+
+    # Process the matches found by the Hungarian algorithm
+    for eng_idx, ger_idx in zip(row_indices, col_indices):
+        score = blended_matrix[eng_idx, ger_idx]
+
+        # Only include matches that meet the threshold
+        if score >= config.SIMILARITY_THRESHOLD:
+            semantic_score = semantic_matrix[eng_idx, ger_idx]
             aligned_pairs.append({
                 "english": english_content[eng_idx],
                 "german": german_content[ger_idx],
-                "similarity": float(final_similarity_score)
+                "similarity": float(semantic_score)  # Cast to float for JSON serialization
             })
-            used_english_indices.add(eng_idx)
             used_german_indices.add(ger_idx)
 
-    # 4. Add unmatched content
-    for i, item in enumerate(english_content):
-        if i not in used_english_indices:
+    # Add unmatched English content
+    matched_english_ids = {id(pair['english']) for pair in aligned_pairs if pair.get('english')}
+    for item in english_content:
+        if id(item) not in matched_english_ids:
             aligned_pairs.append({"english": item, "german": None, "similarity": 0.0})
 
-    for i, item in enumerate(german_content):
-        if i not in used_german_indices:
+    # Add unmatched German content
+    for idx, item in enumerate(german_content):
+        if idx not in used_german_indices:
             aligned_pairs.append({"english": None, "german": item, "similarity": 0.0})
 
-    # 5. Sort the final list
+    # Sort by English page number
     aligned_pairs.sort(key=lambda x: x['english']['page'] if x.get('english') else float('inf'))
-    
-    if generate_debug_report and debug_report_path:
-        print("WARNING: Debug report generation is not supported with the new margin-based alignment method.")
 
     return aligned_pairs
