@@ -1,1 +1,182 @@
-An error occurred: DocumentIntelligenceClientOperationsMixin.begin_analyze_document() missing 1 required positional argument: 'body'
+# test_1/app.py
+from dotenv import load_dotenv
+load_dotenv()
+
+import streamlit as st
+from datetime import datetime
+import time
+from pathlib import Path
+
+# --- Import project modules ---
+import config
+from src.clients.doc_intelligence_client import analyze_pdf
+from src.processing.json_parser import process_document_json
+from src.alignment.semantic_aligner import align_content
+from src.evaluation.pipeline import run_evaluation_pipeline
+from src.reporting.excel_writer import create_excel_report_in_memory, save_alignment_report, save_evaluation_report
+from src.reporting.markdown_writer import save_to_markdown
+
+# --- Page Configuration ---
+st.set_page_config(page_title="Translation Evaluator", layout="wide")
+
+
+# --- UI Functions ---
+def display_results(results_list: list):
+    """Renders the list of evaluation findings in the Streamlit UI."""
+    if not results_list:
+        return
+
+    st.subheader(f"Found {len(results_list)} noteworthy items")
+    results_list.sort(key=lambda x: x.get('page', 0))
+
+    for result in results_list:
+        error_type = result.get('type', 'Info')
+        with st.container(border=True):
+            st.markdown(f"**Page:** `{result.get('page', 'N/A')}` | **Type:** `{error_type}`")
+
+            original_phrase = result.get("original_phrase")
+            translated_phrase = result.get("translated_phrase")
+
+            if original_phrase or translated_phrase:
+                st.markdown("##### 🔍 Error Focus")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Original English Phrase:**")
+                    st.error(f"'{original_phrase or 'N/A'}'")
+                with col2:
+                    st.markdown("**Translated German Phrase:**")
+                    st.warning(f"'{translated_phrase or 'N/A'}'")
+                st.divider()
+
+            st.markdown("##### Full Text Context")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"> {result['english_text']}")
+            with col2:
+                st.markdown(f"> {result['german_text']}")
+            st.markdown(f"**💡 Suggestion:** {result['suggestion']}")
+
+
+# --- Main App ---
+st.title("📚 Translation Evaluator")
+st.markdown(
+    "Upload a source English PDF and its German translation to identify potential "
+    "omissions, additions, or mistranslations."
+)
+st.divider()
+
+# --- Session State Initialization ---
+if 'analysis_complete' not in st.session_state:
+    st.session_state.analysis_complete = False
+if 'evaluation_results' not in st.session_state:
+    st.session_state.evaluation_results = []
+if 'error_message' not in st.session_state:
+    st.session_state.error_message = None
+
+
+# --- Sidebar for Inputs and Controls ---
+with st.sidebar:
+    st.header("1. Upload Documents")
+    english_pdf = st.file_uploader("Upload English PDF (Source)", type="pdf", key="eng_pdf")
+    german_pdf = st.file_uploader("Upload German PDF (Translation)", type="pdf", key="ger_pdf")
+
+    st.header("2. Configure & Run")
+    CONTEXT_WINDOW = 1
+    st.info(f"Using Hungarian Algorithm with Context Window: **{CONTEXT_WINDOW}**")
+    
+    # NEW: Checkbox for optional debug report
+    generate_debug = st.checkbox("Generate detailed debug report", value=False)
+
+
+    if st.button("🚀 Run Analysis", disabled=not (english_pdf and german_pdf), type="primary"):
+        st.session_state.analysis_complete = False
+        st.session_state.evaluation_results = []
+        st.session_state.error_message = None
+        
+        output_dir = Path(config.OUTPUT_DIR)
+        output_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"{Path(english_pdf.name).stem}_{timestamp}"
+
+        try:
+            # --- Main Processing Pipeline ---
+            with st.spinner("Step 1/6: Analyzing PDFs with Azure Document Intelligence..."):
+                eng_bytes = english_pdf.getvalue()
+                eng_json_data = analyze_pdf(eng_bytes, english_pdf.name)
+                
+                ger_bytes = german_pdf.getvalue()
+                ger_json_data = analyze_pdf(ger_bytes, german_pdf.name)
+
+            with st.spinner("Step 2/6: Parsing document content..."):
+                english_content = process_document_json(eng_json_data)
+                german_content = process_document_json(ger_json_data)
+
+            with st.spinner("Step 3/6: Saving verification Markdown files..."):
+                md_eng_path = output_dir / f"processed_{Path(english_pdf.name).stem}_{timestamp}.md"
+                md_ger_path = output_dir / f"processed_{Path(german_pdf.name).stem}_{timestamp}.md"
+                save_to_markdown(english_content, md_eng_path)
+                save_to_markdown(german_content, md_ger_path)
+                st.toast("Saved Markdown files.")
+
+            with st.spinner("Step 4/6: Aligning content segments..."):
+                debug_report_path = output_dir / f"debug_calculations_{base_filename}.xlsx"
+                aligned_pairs = align_content(
+                    english_content,
+                    german_content,
+                    context_window=CONTEXT_WINDOW,
+                    generate_debug_report=generate_debug,
+                    debug_report_path=debug_report_path
+                )
+                if generate_debug:
+                    st.toast("Saved Debug Report.")
+
+            with st.spinner("Step 5/6: Saving alignment report..."):
+                alignment_report_path = output_dir / f"alignment_{base_filename}.xlsx"
+                save_alignment_report(aligned_pairs, alignment_report_path)
+                st.toast("Saved Alignment Report.")
+
+            with st.spinner("Step 6/6: Evaluating aligned pairs for translation errors..."):
+                st.session_state.evaluation_results = list(run_evaluation_pipeline(aligned_pairs))
+
+                # Also save the evaluation report to a file if results exist
+                if st.session_state.evaluation_results:
+                    eval_report_path = output_dir / f"evaluation_{base_filename}.xlsx"
+                    save_evaluation_report(st.session_state.evaluation_results, eval_report_path)
+                    st.toast("Saved Evaluation Report.")
+
+            st.session_state.analysis_complete = True
+            st.success("Analysis pipeline finished successfully!")
+            time.sleep(2)
+            st.rerun()
+
+        except Exception as e:
+            st.session_state.error_message = f"An error occurred: {e}"
+            st.rerun()
+
+    # --- Download Button Logic (Unchanged) ---
+    st.header("3. Export Results")
+    if st.session_state.analysis_complete and st.session_state.evaluation_results:
+        excel_data = create_excel_report_in_memory(st.session_state.evaluation_results)
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        st.download_button(
+            label="📥 Download Report as Excel",
+            data=excel_data,
+            file_name=f"Translation_Analysis_{current_date}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    else:
+        st.markdown("_Report will be available for download after a successful analysis._")
+
+
+# --- Main Display Area for Results ---
+st.header("Evaluation Results")
+
+if st.session_state.error_message:
+    st.error(st.session_state.error_message, icon="🚨")
+elif st.session_state.analysis_complete:
+    if not st.session_state.evaluation_results:
+        st.success("✅ Analysis complete. No significant errors were found.")
+    else:
+        display_results(st.session_state.evaluation_results)
+else:
+    st.info("Upload your English and German PDF files in the sidebar and click 'Run Analysis' to begin.")
