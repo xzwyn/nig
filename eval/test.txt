@@ -1,136 +1,3 @@
-# test_1/src/processing/section_parser.py
-
-from typing import List, Dict, Any, Tuple
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-from openai import AzureOpenAI
-
-import config
-from src.alignment.semantic_aligner import _get_azure_client, _get_embeddings_in_batches, ContentItem
-
-# A helper type alias
-SectionBatch = List[ContentItem]
-
-def _identify_and_align_sections(
-    eng_content: List[ContentItem],
-    ger_content: List[ContentItem],
-    client: AzureOpenAI
-) -> List[Tuple[ContentItem, ContentItem]]:
-    """
-    Identifies section headings in both documents, gets their embeddings,
-    and aligns them based on semantic similarity.
-    """
-    eng_headings = [item for item in eng_content if item['type'] in config.STRUCTURAL_ROLES]
-    ger_headings = [item for item in ger_content if item['type'] in config.STRUCTURAL_ROLES]
-
-    if not eng_headings or not ger_headings:
-        return []
-
-    # Get embeddings for the heading texts
-    eng_heading_embeddings = _get_embeddings_in_batches([h['text'] for h in eng_headings], eng_headings, client, context_window=0)
-    ger_heading_embeddings = _get_embeddings_in_batches([h['text'] for h in ger_headings], ger_headings, client, context_window=0)
-
-    # Calculate similarity and find best matches
-    similarity_matrix = cosine_similarity(eng_heading_embeddings, ger_heading_embeddings)
-
-    aligned_sections = []
-    used_ger_indices = set()
-
-    # Find the best German match for each English heading
-    for i, eng_heading in enumerate(eng_headings):
-        if similarity_matrix.shape[1] == 0: continue
-        best_match_idx = np.argmax(similarity_matrix[i])
-        score = similarity_matrix[i, best_match_idx]
-
-        if score > config.SIMILARITY_THRESHOLD and best_match_idx not in used_ger_indices:
-            aligned_sections.append((eng_heading, ger_headings[best_match_idx]))
-            used_ger_indices.add(best_match_idx)
-            # Prevent this German heading from being matched again
-            similarity_matrix[:, best_match_idx] = -1
-
-    return aligned_sections
-
-def create_section_batches(
-    english_content: List[ContentItem],
-    german_content: List[ContentItem]
-) -> Tuple[List[Tuple[SectionBatch, SectionBatch]], SectionBatch, SectionBatch]:
-    """
-    Parses content lists into batches based on aligned structural roles (e.g., section headings).
-
-    Returns:
-        A tuple containing:
-        1. A list of paired section batches: [ (eng_batch_1, ger_batch_1), ... ]
-        2. A list of unassigned English content.
-        3. A list of unassigned German content.
-    """
-    print("Identifying and aligning document sections...")
-    client = _get_azure_client()
-    aligned_headings = _identify_and_align_sections(english_content, german_content, client)
-
-    if not aligned_headings:
-        print("-> No sections found or aligned. Treating documents as a single batch.")
-        return [(english_content, german_content)], [], []
-
-    print(f"-> Found and aligned {len(aligned_headings)} sections.")
-    batched_pairs: List[Tuple[SectionBatch, SectionBatch]] = []
-    
-    eng_assigned_offsets = set()
-    ger_assigned_offsets = set()
-
-    for i, (eng_head, ger_head) in enumerate(aligned_headings):
-        eng_batch: SectionBatch = [eng_head]
-        ger_batch: SectionBatch = [ger_head]
-        
-        # Add section title metadata for richer reporting
-        eng_head['section_title'] = eng_head['text']
-        ger_head['section_title'] = ger_head['text']
-
-        eng_assigned_offsets.add(eng_head['offset'])
-        ger_assigned_offsets.add(ger_head['offset'])
-
-        # Define the content range for the English section
-        start_offset_eng = eng_head['offset']
-        end_offset_eng = aligned_headings[i + 1][0]['offset'] if i + 1 < len(aligned_headings) else float('inf')
-
-        # Collect all content within this English section
-        for item in english_content:
-            if start_offset_eng < item['offset'] < end_offset_eng:
-                item['section_title'] = eng_head['text'] # Add metadata
-                eng_batch.append(item)
-                eng_assigned_offsets.add(item['offset'])
-
-        # Define the content range for the German section
-        start_offset_ger = ger_head['offset']
-        end_offset_ger = float('inf')
-        # Find the correct end offset for the German section based on the next *aligned* German heading
-        for next_eng, next_ger in aligned_headings[i + 1:]:
-            if next_ger['offset'] > start_offset_ger:
-                end_offset_ger = next_ger['offset']
-                break
-        
-        # Collect all content within this German section
-        for item in german_content:
-            if start_offset_ger < item['offset'] < end_offset_ger:
-                item['section_title'] = ger_head['text'] # Add metadata
-                ger_batch.append(item)
-                ger_assigned_offsets.add(item['offset'])
-
-        batched_pairs.append((eng_batch, ger_batch))
-
-    # Collect any content that was not part of an aligned section (e.g., front matter)
-    unassigned_eng = [item for item in english_content if item['offset'] not in eng_assigned_offsets]
-    unassigned_ger = [item for item in german_content if item['offset'] not in ger_assigned_offsets]
-    
-    # Add unassigned content as its own batch if it exists
-    if unassigned_eng or unassigned_ger:
-        for item in unassigned_eng: item['section_title'] = "Unassigned"
-        for item in unassigned_ger: item['section_title'] = "Unassigned"
-        batched_pairs.insert(0, (unassigned_eng, unassigned_ger))
-        print(f"-> Grouped {len(unassigned_eng)} English and {len(unassigned_ger)} German unassigned segments into a separate batch.")
-
-    return batched_pairs, unassigned_eng, unassigned_ger
-
-
 # test_1/src/alignment/semantic_aligner.py
 from typing import List, Dict, Any
 from pathlib import Path
@@ -352,189 +219,33 @@ def align_content(
     # --- Step 3: Generate Optional Debug Report (uses original full lists) ---
     # This report is now more of a holistic overview. The section-by-section
     # logic is handled above. For a true debug, one would log each batch's matrices.
-    if generate_debug_report and debug
+    if generate_debug_report and debug_report_path:
+        print("Generating detailed calculation overview report for debugging...")
+        # Note: This debug report shows the *potential* global best match, which may differ
+        # from the batch-local match. This can be useful for analysis.
+        eng_texts = [item['text'] for item in english_content]
+        ger_texts = [item['text'] for item in german_content]
+        english_embeddings = _get_embeddings_in_batches(eng_texts, english_content, client, context_window=context_window)
+        german_embeddings = _get_embeddings_in_batches(ger_texts, german_content, client, context_window=context_window)
+        semantic_matrix = cosine_similarity(english_embeddings, german_embeddings)
+        type_matrix = _calculate_type_matrix(english_content, german_content)
+        proximity_matrix = _calculate_proximity_matrix(len(english_content), len(german_content))
+        blended_matrix = (
+            (config.W_SEMANTIC * semantic_matrix) +
+            (config.W_TYPE * type_matrix) +
+            (config.W_PROXIMITY * proximity_matrix)
+        )
+        save_calculation_report(
+            english_content=english_content,
+            german_content=german_content,
+            blended_matrix=blended_matrix,
+            semantic_matrix=semantic_matrix,
+            type_matrix=type_matrix,
+            proximity_matrix=proximity_matrix,
+            filepath=debug_report_path
+        )
 
+    # --- Step 4: Final Sort and Return ---
+    all_aligned_pairs.sort(key=lambda x: x['english']['page'] if x.get('english') else (x['german']['page'] if x.get('german') else float('inf')))
 
-
-# test_1/src/reporting/excel_writer.py
-import io
-from pathlib import Path
-from typing import List, Dict, Any
-import pandas as pd
-import numpy as np
-
-import config
-
-AlignedPair = Dict[str, Any]
-EvaluationFinding = Dict[str, Any]
-ContentItem = Dict[str, Any]
-
-def save_alignment_report(aligned_data: List[AlignedPair], filepath: Path) -> None:
-    # ... (This function remains unchanged) ...
-    """Saves the document alignment data to an Excel file."""
-    if not aligned_data:
-        print("Warning: No aligned data to save to Excel.")
-        return
-    report_data = []
-    for pair in aligned_data:
-        eng_item = pair.get('english')
-        ger_item = pair.get('german')
-        report_data.append({
-            "English": eng_item.get('text', '') if eng_item else "--- OMITTED ---",
-            "German": ger_item.get('text', '') if ger_item else "--- ADDED ---",
-            "Similarity": f"{pair.get('similarity', 0.0):.4f}",
-            "Type": (eng_item.get('type') if eng_item else ger_item.get('type', 'N/A')),
-            "English Page": (eng_item.get('page') if eng_item else 'N/A'),
-            "German Page": (ger_item.get('page') if ger_item else 'N/A')
-        })
-    df = pd.DataFrame(report_data)
-    try:
-        df.to_excel(filepath, index=False, engine='openpyxl')
-    except Exception as e:
-        print(f"Error: Could not write alignment report to '{filepath}'. Reason: {e}")
-
-
-def save_evaluation_report(evaluation_results: List[EvaluationFinding], filepath: Path) -> None:
-    # ... (This function remains unchanged) ...
-    """Saves the AI evaluation findings to a separate Excel report."""
-    if not evaluation_results:
-        print("No evaluation findings to save.")
-        return
-    evaluation_results.sort(key=lambda x: x.get('page', 0))
-    df = pd.DataFrame(evaluation_results)
-    desired_columns = [
-        "page", "type", "suggestion", "english_text", "german_text",
-        "original_phrase", "translated_phrase"
-    ]
-    final_columns = [col for col in desired_columns if col in df.columns]
-    df = df[final_columns]
-    try:
-        df.to_excel(filepath, index=False, sheet_name='Evaluation_Findings')
-    except Exception as e:
-        print(f"Error: Could not write evaluation report to '{filepath}'. Reason: {e}")
-
-
-def save_calculation_report(
-    english_content: List[ContentItem],
-    german_content: List[ContentItem],
-    blended_matrix: np.ndarray,
-    semantic_matrix: np.ndarray,
-    type_matrix: np.ndarray,
-    proximity_matrix: np.ndarray,
-    filepath: Path
-):
-    """
-    Saves a highly detailed, two-sheet Excel report showing all alignment score calculations.
-    """
-    try:
-        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
-            # --- Process English Sheet ---
-            eng_report_data = []
-            if blended_matrix.shape[1] > 0:
-                best_ger_indices = np.argmax(blended_matrix, axis=1)
-            else:
-                best_ger_indices = [0] * len(english_content)
-
-
-            for i, item in enumerate(english_content):
-                best_match_idx = best_ger_indices[i]
-                best_match_item = german_content[best_match_idx] if german_content else {}
-
-                raw_semantic = semantic_matrix[i, best_match_idx] if german_content else 0
-                raw_type = type_matrix[i, best_match_idx] if german_content else 0
-                raw_proximity = proximity_matrix[i, best_match_idx] if german_content else 0
-
-                eng_report_data.append({
-                    # NEW: Added Section Title column for context
-                    "Section Title": item.get('section_title', 'N/A'),
-                    "Text": item['text'],
-                    "Type": item['type'],
-                    "Page No": item['page'],
-                    "Raw Semantic": f"{raw_semantic:.4f}",
-                    "Semantic Calculation": f"{raw_semantic:.4f} x {config.W_SEMANTIC}",
-                    "Weighted Semantic": f"{raw_semantic * config.W_SEMANTIC:.4f}",
-                    "Raw Type": f"{raw_type:.1f}",
-                    "Type Calculation": f"{raw_type:.1f} x {config.W_TYPE}",
-                    "Weighted Type": f"{raw_type * config.W_TYPE:.4f}",
-                    "Raw Proximity": f"{raw_proximity:.4f}",
-                    "Proximity Calculation": f"{raw_proximity:.4f} x {config.W_PROXIMITY}",
-                    "Weighted Proximity": f"{raw_proximity * config.W_PROXIMITY:.4f}",
-                    "Total Score": f"{blended_matrix[i, best_match_idx]:.4f}" if german_content else "N/A",
-                    "Best Match (German)": best_match_item.get('text'),
-                    "Best Match Type": best_match_item.get('type'),
-                    "Best Match Page": best_match_item.get('page')
-                })
-
-            df_eng = pd.DataFrame(eng_report_data)
-            df_eng.to_excel(writer, sheet_name='English Calculations', index=False)
-
-            # --- Process German Sheet ---
-            ger_report_data = []
-            if blended_matrix.shape[0] > 0:
-                best_eng_indices = np.argmax(blended_matrix, axis=0)
-            else:
-                best_eng_indices = [0] * len(german_content)
-
-            for j, item in enumerate(german_content):
-                best_match_idx = best_eng_indices[j]
-                best_match_item = english_content[best_match_idx] if english_content else {}
-
-                raw_semantic = semantic_matrix[best_match_idx, j] if english_content else 0
-                raw_type = type_matrix[best_match_idx, j] if english_content else 0
-                raw_proximity = proximity_matrix[best_match_idx, j] if english_content else 0
-
-                ger_report_data.append({
-                    # NEW: Added Section Title column for context
-                    "Section Title": item.get('section_title', 'N/A'),
-                    "Text": item['text'],
-                    "Type": item['type'],
-                    "Page No": item['page'],
-                    "Raw Semantic": f"{raw_semantic:.4f}",
-                    "Semantic Calculation": f"{raw_semantic:.4f} x {config.W_SEMANTIC}",
-                    "Weighted Semantic": f"{raw_semantic * config.W_SEMANTIC:.4f}",
-                    "Raw Type": f"{raw_type:.1f}",
-                    "Type Calculation": f"{raw_type:.1f} x {config.W_TYPE}",
-                    "Weighted Type": f"{raw_type * config.W_TYPE:.4f}",
-                    "Raw Proximity": f"{raw_proximity:.4f}",
-                    "Proximity Calculation": f"{raw_proximity:.4f} x {config.W_PROXIMITY}",
-                    "Weighted Proximity": f"{raw_proximity * config.W_PROXIMITY:.4f}",
-                    "Total Score": f"{blended_matrix[best_match_idx, j]:.4f}" if english_content else "N/A",
-                    "Best Match (English)": best_match_item.get('text'),
-                    "Best Match Type": best_match_item.get('type'),
-                    "Best Match Page": best_match_item.get('page')
-                })
-
-            df_ger = pd.DataFrame(ger_report_data)
-            df_ger.to_excel(writer, sheet_name='German Calculations', index=False)
-
-    except Exception as e:
-        print(f"Error: Could not write debug calculation report to '{filepath}'. Reason: {e}")
-
-
-def create_excel_report_in_memory(evaluation_results: List[EvaluationFinding]) -> bytes:
-    # ... (This function remains unchanged) ...
-    """
-    Creates the evaluation Excel report in memory and returns it as bytes.
-    """
-    if not evaluation_results:
-        return b'' # Return empty bytes if there's nothing to report
-
-    evaluation_results.sort(key=lambda x: x.get('page', 0))
-    df = pd.DataFrame(evaluation_results)
-
-    # Define the desired column order for the final report
-    desired_columns = [
-        "page", "type", "suggestion", "english_text", "german_text",
-        "original_phrase", "translated_phrase"
-    ]
-    # Filter the dataframe to only include existing columns in the desired order
-    final_columns = [col for col in desired_columns if col in df.columns]
-    df = df[final_columns]
-
-    # Use an in-memory buffer to save the Excel file
-    output_buffer = io.BytesIO()
-    with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Evaluation_Findings')
-
-    # Retrieve the byte data from the buffer
-    return output_buffer.getvalue()
+    return all_aligned_pairs
