@@ -1,96 +1,241 @@
-// src/alignment/toc_aligner.py
-# src/alignment/toc_aligner.py
+# test_1/src/processing/section_parser.py
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from scipy.optimize import linear_sum_assignment
+from openai import AzureOpenAI
 
-from src.clients.azure_client import get_embeddings # Import the new function
+import config
+from src.alignment.semantic_aligner import _get_azure_client, _get_embeddings_in_batches, ContentItem
 
-# Type Aliases for clarity
-ToCItem = Dict[str, Any]
-AlignedToCPair = Dict[str, Any]
+# A helper type alias
+SectionBatch = List[ContentItem]
 
-def align_tocs(english_toc: List[ToCItem], german_toc: List[ToCItem]) -> List[AlignedToCPair]:
+def _identify_and_align_sections(
+    eng_content: List[ContentItem],
+    ger_content: List[ContentItem],
+    client: AzureOpenAI
+) -> List[Tuple[ContentItem, ContentItem]]:
     """
-    Aligns the Table of Contents using Azure OpenAI embeddings.
+    Identifies section headings in both documents, gets their embeddings,
+    and aligns them based on semantic similarity.
     """
-    if not english_toc or not german_toc:
+    eng_headings = [item for item in eng_content if item['type'] in config.STRUCTURAL_ROLES]
+    ger_headings = [item for item in ger_content if item['type'] in config.STRUCTURAL_ROLES]
+
+    if not eng_headings or not ger_headings:
         return []
 
-    eng_titles = [item['title'] for item in english_toc]
-    ger_titles = [item['title'] for item in german_toc]
-    
-    # Get embeddings from Azure OpenAI API
-    english_embeddings_list = get_embeddings(eng_titles)
-    german_embeddings_list = get_embeddings(ger_titles)
+    # Get embeddings for the heading texts
+    eng_heading_embeddings = _get_embeddings_in_batches([h['text'] for h in eng_headings], eng_headings, client, context_window=0)
+    ger_heading_embeddings = _get_embeddings_in_batches([h['text'] for h in ger_headings], ger_headings, client, context_window=0)
 
-    # Convert to numpy arrays for calculation
-    english_embeddings = np.array(english_embeddings_list)
-    german_embeddings = np.array(german_embeddings_list)
-    
-    # Calculate similarity matrix
-    similarity_matrix = cosine_similarity(english_embeddings, german_embeddings)
-    
-    # Use the Hungarian algorithm to find the optimal assignment
-    cost_matrix = -similarity_matrix
-    row_indices, col_indices = linear_sum_assignment(cost_matrix)
+    # Calculate similarity and find best matches
+    similarity_matrix = cosine_similarity(eng_heading_embeddings, ger_heading_embeddings)
 
-    aligned_sections: List[AlignedToCPair] = []
-    
-    print("Matching ToC sections...")
-    for eng_idx, ger_idx in zip(row_indices, col_indices):
-        score = similarity_matrix[eng_idx, ger_idx]
-        if score > 0.4:
-            aligned_sections.append({
-                'english': english_toc[eng_idx],
-                'german': german_toc[ger_idx],
-                'similarity': score
-            })
-            print(f"  - Matched '{english_toc[eng_idx]['title']}' -> '{german_toc[ger_idx]['title']}' (Score: {score:.2f})")
+    aligned_sections = []
+    used_ger_indices = set()
+
+    # Find the best German match for each English heading
+    for i, eng_heading in enumerate(eng_headings):
+        if similarity_matrix.shape[1] == 0: continue
+        best_match_idx = np.argmax(similarity_matrix[i])
+        score = similarity_matrix[i, best_match_idx]
+
+        if score > config.SIMILARITY_THRESHOLD and best_match_idx not in used_ger_indices:
+            aligned_sections.append((eng_heading, ger_headings[best_match_idx]))
+            used_ger_indices.add(best_match_idx)
+            # Prevent this German heading from being matched again
+            similarity_matrix[:, best_match_idx] = -1
 
     return aligned_sections
 
-// src/alignment/semantic_aligner.py
-# src/alignment/semantic_aligner.py
+def create_section_batches(
+    english_content: List[ContentItem],
+    german_content: List[ContentItem]
+) -> Tuple[List[Tuple[SectionBatch, SectionBatch]], SectionBatch, SectionBatch]:
+    """
+    Parses content lists into batches based on aligned structural roles (e.g., section headings).
 
-from typing import List, Dict, Any, Tuple, Optional
+    Returns:
+        A tuple containing:
+        1. A list of paired section batches: [ (eng_batch_1, ger_batch_1), ... ]
+        2. A list of unassigned English content.
+        3. A list of unassigned German content.
+    """
+    print("Identifying and aligning document sections...")
+    client = _get_azure_client()
+    aligned_headings = _identify_and_align_sections(english_content, german_content, client)
+
+    if not aligned_headings:
+        print("-> No sections found or aligned. Treating documents as a single batch.")
+        return [(english_content, german_content)], [], []
+
+    print(f"-> Found and aligned {len(aligned_headings)} sections.")
+    batched_pairs: List[Tuple[SectionBatch, SectionBatch]] = []
+    
+    eng_assigned_offsets = set()
+    ger_assigned_offsets = set()
+
+    for i, (eng_head, ger_head) in enumerate(aligned_headings):
+        eng_batch: SectionBatch = [eng_head]
+        ger_batch: SectionBatch = [ger_head]
+        
+        # Add section title metadata for richer reporting
+        eng_head['section_title'] = eng_head['text']
+        ger_head['section_title'] = ger_head['text']
+
+        eng_assigned_offsets.add(eng_head['offset'])
+        ger_assigned_offsets.add(ger_head['offset'])
+
+        # Define the content range for the English section
+        start_offset_eng = eng_head['offset']
+        end_offset_eng = aligned_headings[i + 1][0]['offset'] if i + 1 < len(aligned_headings) else float('inf')
+
+        # Collect all content within this English section
+        for item in english_content:
+            if start_offset_eng < item['offset'] < end_offset_eng:
+                item['section_title'] = eng_head['text'] # Add metadata
+                eng_batch.append(item)
+                eng_assigned_offsets.add(item['offset'])
+
+        # Define the content range for the German section
+        start_offset_ger = ger_head['offset']
+        end_offset_ger = float('inf')
+        # Find the correct end offset for the German section based on the next *aligned* German heading
+        for next_eng, next_ger in aligned_headings[i + 1:]:
+            if next_ger['offset'] > start_offset_ger:
+                end_offset_ger = next_ger['offset']
+                break
+        
+        # Collect all content within this German section
+        for item in german_content:
+            if start_offset_ger < item['offset'] < end_offset_ger:
+                item['section_title'] = ger_head['text'] # Add metadata
+                ger_batch.append(item)
+                ger_assigned_offsets.add(item['offset'])
+
+        batched_pairs.append((eng_batch, ger_batch))
+
+    # Collect any content that was not part of an aligned section (e.g., front matter)
+    unassigned_eng = [item for item in english_content if item['offset'] not in eng_assigned_offsets]
+    unassigned_ger = [item for item in german_content if item['offset'] not in ger_assigned_offsets]
+    
+    # Add unassigned content as its own batch if it exists
+    if unassigned_eng or unassigned_ger:
+        for item in unassigned_eng: item['section_title'] = "Unassigned"
+        for item in unassigned_ger: item['section_title'] = "Unassigned"
+        batched_pairs.insert(0, (unassigned_eng, unassigned_ger))
+        print(f"-> Grouped {len(unassigned_eng)} English and {len(unassigned_ger)} German unassigned segments into a separate batch.")
+
+    return batched_pairs, unassigned_eng, unassigned_ger
+
+
+# test_1/src/alignment/semantic_aligner.py
+from typing import List, Dict, Any
+from pathlib import Path
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from openai import AzureOpenAI
+from tqdm import tqdm
 from scipy.optimize import linear_sum_assignment
 
 import config
-from src.clients.azure_client import get_embeddings # Correctly import from Azure client
+from src.reporting.excel_writer import save_calculation_report
+# Import the new section batching function
+from src.processing.section_parser import create_section_batches
 
-# Type Aliases
+# Type Aliases for clarity
 ContentItem = Dict[str, Any]
 AlignedPair = Dict[str, Any]
+SectionBatch = List[ContentItem]
 
-def _get_embeddings_with_context(
+# A reusable client instance
+_client = None
+
+def _get_azure_client() -> AzureOpenAI:
+    """Initializes and returns a reusable AzureOpenAI client."""
+    global _client
+    if _client is None:
+        print("Initializing Azure OpenAI client...")
+        if not all([config.AZURE_EMBEDDING_ENDPOINT, config.AZURE_EMBEDDING_API_KEY]):
+            raise ValueError("Azure credentials (endpoint, key) are not set in the config/.env file.")
+
+        _client = AzureOpenAI(
+            api_version=config.AZURE_API_VERSION,
+            azure_endpoint=config.AZURE_EMBEDDING_ENDPOINT,
+            api_key=config.AZURE_EMBEDDING_API_KEY,
+        )
+    return _client
+
+def _get_embeddings_in_batches(
     texts: List[str],
-    content_items: List[ContentItem]
+    content_items: List[ContentItem],
+    client: AzureOpenAI,
+    batch_size: int = 16,
+    context_window: int = 0
 ) -> np.ndarray:
     """
-    Prepares text with context and gets embeddings from the Azure OpenAI API.
+    Generates embeddings by sending texts to the Azure API in batches.
+    Optionally includes context from surrounding segments.
     """
-    context_window = 1
-    texts_with_context = []
-    print(f"Enhancing text with a context window of {context_window}...")
-    for i, text in enumerate(texts):
-        pre_context = " ".join([content_items[j]['text'] for j in range(max(0, i - context_window), i)])
-        post_context = " ".join([content_items[j]['text'] for j in range(i + 1, min(len(texts), i + 1 + context_window))])
-        context_text = f"{pre_context} [SEP] {text} [SEP] {post_context}".strip()
-        texts_with_context.append(context_text)
-    
-    # Get embeddings from Azure and convert to numpy array
-    embedding_list = get_embeddings(texts_with_context)
-    return np.array(embedding_list)
+    # Generate texts with context if context_window > 0
+    if context_window > 0:
+        texts_with_context = []
+        for i, text in enumerate(texts):
+            # Get preceding context
+            pre_context = ""
+            for j in range(max(0, i - context_window), i):
+                pre_context += f"{content_items[j]['text']} "
+
+            # Get following context
+            post_context = ""
+            for j in range(i + 1, min(len(texts), i + context_window + 1)):
+                post_context += f" {content_items[j]['text']}"
+
+            # Include content type and page number for additional context
+            content_type = content_items[i]['type']
+            page_num = content_items[i]['page']
+
+            # Create context-enhanced text
+            if pre_context or post_context:
+                context_text = f"{pre_context}[SEP]{text}[SEP]{post_context} [TYPE:{content_type}] [PAGE:{page_num}]"
+            else:
+                context_text = f"{text} [TYPE:{content_type}] [PAGE:{page_num}]"
+
+            texts_with_context.append(context_text)
+
+        # Use the context-enhanced texts
+        texts_to_embed = texts_with_context
+    else:
+        # Use original texts
+        texts_to_embed = texts
+
+    # Generate embeddings in batches
+    all_embeddings = []
+    # Note: Disabling tqdm here as it can get messy in a loop. A single progress bar in the main loop is better.
+    for i in range(0, len(texts_to_embed), batch_size):
+        batch = texts_to_embed[i:i + batch_size]
+        if not batch: continue
+        try:
+            response = client.embeddings.create(
+                input=batch,
+                model=config.AZURE_EMBEDDING_DEPLOYMENT_NAME
+            )
+            batch_embeddings = [item.embedding for item in response.data]
+            all_embeddings.extend(batch_embeddings)
+        except Exception as e:
+            print(f"An error occurred while processing a batch: {e}")
+            # Add placeholder embeddings for the failed batch to avoid size mismatch
+            all_embeddings.extend([[0.0] * 3072] * len(batch))  # text-embedding-3-large has 3072 dimensions
+
+    return np.array(all_embeddings)
 
 def _calculate_type_matrix(eng_content: List[ContentItem], ger_content: List[ContentItem]) -> np.ndarray:
-    """Calculates a matrix rewarding or penalizing based on content type matching."""
-    num_eng, num_ger = len(eng_content), len(ger_content)
+    num_eng = len(eng_content)
+    num_ger = len(ger_content)
     type_matrix = np.zeros((num_eng, num_ger))
+
     for i in range(num_eng):
         for j in range(num_ger):
             if eng_content[i]['type'] == ger_content[j]['type']:
@@ -100,813 +245,136 @@ def _calculate_type_matrix(eng_content: List[ContentItem], ger_content: List[Con
     return type_matrix
 
 def _calculate_proximity_matrix(num_eng: int, num_ger: int) -> np.ndarray:
-    """Calculates a matrix rewarding based on the relative position in the document."""
     proximity_matrix = np.zeros((num_eng, num_ger))
     for i in range(num_eng):
         for j in range(num_ger):
-            norm_pos_eng = i / num_eng if num_eng > 1 else 0
-            norm_pos_ger = j / num_ger if num_ger > 1 else 0
+            norm_pos_eng = i / num_eng if num_eng > 0 else 0
+            norm_pos_ger = j / num_ger if num_ger > 0 else 0
             proximity_matrix[i, j] = 1.0 - abs(norm_pos_eng - norm_pos_ger)
     return proximity_matrix
 
-def align_content(
-    english_content: List[ContentItem],
-    german_content: List[ContentItem],
-    generate_debug_report: bool = False
-) -> Tuple[List[AlignedPair], Optional[Dict[str, Any]]]:
+def _align_batch(
+    english_batch: SectionBatch,
+    german_batch: SectionBatch,
+    client: AzureOpenAI,
+    context_window: int
+) -> List[AlignedPair]:
     """
-    Aligns content using the Hungarian algorithm with Azure OpenAI embeddings.
-
-    Returns:
-        A tuple containing:
-        1. A list of aligned pairs.
-        2. A dictionary with all data needed for a debug report (or None if not requested).
+    Performs alignment on a single batch of content using the Hungarian algorithm.
     """
-    if not english_content or not german_content:
-        return [], None
+    if not english_batch or not german_batch:
+        # Handle batches where one side is empty
+        aligned_pairs = []
+        for item in english_batch:
+            aligned_pairs.append({"english": item, "german": None, "similarity": 0.0})
+        for item in german_batch:
+            aligned_pairs.append({"english": None, "german": item, "similarity": 0.0})
+        return aligned_pairs
 
-    # Get embeddings for both languages
-    english_embeddings = _get_embeddings_with_context(
-        [item['text'] for item in english_content], english_content
-    )
-    german_embeddings = _get_embeddings_with_context(
-        [item['text'] for item in german_content], german_content
-    )
+    num_eng, num_ger = len(english_batch), len(german_batch)
+    eng_texts = [item['text'] for item in english_batch]
+    ger_texts = [item['text'] for item in german_batch]
 
-    # Calculate the three score matrices
+    english_embeddings = _get_embeddings_in_batches(eng_texts, english_batch, client, context_window=context_window)
+    german_embeddings = _get_embeddings_in_batches(ger_texts, german_batch, client, context_window=context_window)
+
     semantic_matrix = cosine_similarity(english_embeddings, german_embeddings)
-    type_matrix = _calculate_type_matrix(english_content, german_content)
-    proximity_matrix = _calculate_proximity_matrix(len(english_content), len(german_content))
+    type_matrix = _calculate_type_matrix(english_batch, german_batch)
+    proximity_matrix = _calculate_proximity_matrix(num_eng, num_ger)
 
-    # Blend the matrices using weights from config
     blended_matrix = (
         (config.W_SEMANTIC * semantic_matrix) +
         (config.W_TYPE * type_matrix) +
         (config.W_PROXIMITY * proximity_matrix)
     )
 
-    debug_data = None
-    if generate_debug_report:
-        debug_data = {
-            'english_content': english_content,
-            'german_content': german_content,
-            'blended_matrix': blended_matrix,
-            'semantic_matrix': semantic_matrix,
-            'type_matrix': type_matrix,
-            'proximity_matrix': proximity_matrix
-        }
-
-    # Find optimal pairs using the Hungarian algorithm
-    aligned_pairs: List[AlignedPair] = []
-    used_english_indices, used_german_indices = set(), set()
     cost_matrix = -blended_matrix
     row_indices, col_indices = linear_sum_assignment(cost_matrix)
+
+    batch_aligned_pairs: List[AlignedPair] = []
+    used_ger_indices = set()
+    used_eng_indices = set()
 
     for eng_idx, ger_idx in zip(row_indices, col_indices):
         score = blended_matrix[eng_idx, ger_idx]
         if score >= config.SIMILARITY_THRESHOLD:
             semantic_score = semantic_matrix[eng_idx, ger_idx]
-            aligned_pairs.append({
-                "english": english_content[eng_idx],
-                "german": german_content[ger_idx],
+            batch_aligned_pairs.append({
+                "english": english_batch[eng_idx],
+                "german": german_batch[ger_idx],
                 "similarity": float(semantic_score)
             })
-            used_english_indices.add(eng_idx)
-            used_german_indices.add(ger_idx)
+            used_eng_indices.add(eng_idx)
+            used_ger_indices.add(ger_idx)
 
-    # Add any remaining unmatched items
-    for i, item in enumerate(english_content):
-        if i not in used_english_indices:
-            aligned_pairs.append({"english": item, "german": None, "similarity": 0.0})
-    for j, item in enumerate(german_content):
-        if j not in used_german_indices:
-            aligned_pairs.append({"english": None, "german": item, "similarity": 0.0})
-    
-    return aligned_pairs, debug_data
+    # Add unmatched items from this batch
+    for i, item in enumerate(english_batch):
+        if i not in used_eng_indices:
+            batch_aligned_pairs.append({"english": item, "german": None, "similarity": 0.0})
+    for i, item in enumerate(german_batch):
+        if i not in used_ger_indices:
+            batch_aligned_pairs.append({"english": None, "german": item, "similarity": 0.0})
 
-// src/clients/azure_client.py
-import os
-from typing import List, Dict, Any, Optional
-from openai import AzureOpenAI
-from dotenv import load_dotenv
-load_dotenv()
+    return batch_aligned_pairs
 
-_chat_client: Optional[AzureOpenAI] = None
-_embedding_client: Optional[AzureOpenAI] = None
 
-_cfg = {
-    "chat_endpoint": None,
-    "chat_api_key": None,
-    "chat_api_version": None,
-    "chat_deployment": None,
-    "embedding_endpoint": None,
-    "embedding_api_key": None,
-    "embedding_api_version": None,
-    "embedding_deployment": None,
-}
-
-def _load_env():
-    # Chat configuration
-    _cfg["chat_endpoint"] = os.getenv("AZURE_OPENAI_ENDPOINT")
-    _cfg["chat_api_key"] = os.getenv("AZURE_OPENAI_API_KEY")
-    _cfg["chat_api_version"] = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
-    _cfg["chat_deployment"] = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-
-    # Embedding configuration
-    _cfg["embedding_endpoint"] = os.getenv("AZURE_EMBEDDING_ENDPOINT")
-    _cfg["embedding_api_key"] = os.getenv("AZURE_EMBEDDING_API_KEY")
-    _cfg["embedding_api_version"] = os.getenv("AZURE_API_VERSION", "2024-02-01")
-    _cfg["embedding_deployment"] = os.getenv("AZURE_EMBEDDING_DEPLOYMENT_NAME")
-
-def _get_chat_client() -> AzureOpenAI:
-    global _chat_client
-    if _chat_client is not None:
-        return _chat_client
-
-    _load_env()
-    if not _cfg["chat_endpoint"] or not _cfg["chat_api_key"] or not _cfg["chat_deployment"]:
-        raise RuntimeError(
-            "Azure OpenAI chat client is not configured. "
-            "Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, and AZURE_OPENAI_DEPLOYMENT in your .env file."
-        )
-
-    _chat_client = AzureOpenAI(
-        azure_endpoint=_cfg["chat_endpoint"],
-        api_key=_cfg["chat_api_key"],
-        api_version=_cfg["chat_api_version"],
-    )
-    return _chat_client
-
-def _get_embedding_client() -> AzureOpenAI:
-    global _embedding_client
-    if _embedding_client is not None:
-        return _embedding_client
-
-    _load_env()
-    if not _cfg["embedding_endpoint"] or not _cfg["embedding_api_key"] or not _cfg["embedding_deployment"]:
-        raise RuntimeError(
-            "Azure OpenAI embedding client is not configured. "
-            "Set AZURE_EMBEDDING_ENDPOINT, AZURE_EMBEDDING_API_KEY, and AZURE_EMBEDDING_DEPLOYMENT_NAME in your .env file."
-        )
-
-    _embedding_client = AzureOpenAI(
-        azure_endpoint=_cfg["embedding_endpoint"],
-        api_key=_cfg["embedding_api_key"],
-        api_version=_cfg["embedding_api_version"] or _cfg["chat_api_version"],
-    )
-    return _embedding_client
-
-def chat(messages: List[Dict[str, Any]], temperature: float = 0.1, model: Optional[str] = None) -> str:
-    client = _get_chat_client()
-    deployment = model or _cfg["chat_deployment"]
-
-    resp = client.chat.completions.create(
-        model=deployment,
-        messages=messages,
-        temperature=temperature,
-    )
-    return resp.choices[0].message.content or ""
-
-def get_embeddings(texts: List[str], model: Optional[str]=None) -> List[List[float]]:
-    client = _get_embedding_client()
-    deployment = model or _cfg['embedding_deployment']
-
-    if not deployment:
-        raise ValueError("No embedding deployment specified. Please set AZURE_EMBEDDING_DEPLOYMENT_NAME in your .env file.")
-
-    response = client.embeddings.create(
-        input=texts,
-        model=deployment
-    )
-    return [item.embedding for item in response.data]
-
-// src/evaluation/evaluators.py
-# src/evaluation/evaluators.py
-import json
-from src.clients.azure_client import chat  
-
-def evaluate_translation_pair(eng_text: str, ger_text: str, model_name=None):
-    prompt = f"""
-## ROLE
-You are the Primary Translation Auditor for EN→DE corporate reports.
-
-## TASK
-Identify only the two fatal error categories below and output ONE JSON object.
-
-## ERROR TYPES YOU MAY REPORT
-1. Mistranslation
-   • Wrong numeric value (digits, words, units, decimals, percentages)
-   • Polarity flip / negation error (e.g., required ↔ not required)
-   • Change of actor or agency (who did/decided/informed whom)
-
-2. Omission
-   The English text states a concrete count (“two”, “three”, “both”, “either”) or lists specific items, and at least one required element is missing in German.
-
-Do not flag: stylistic differences, safe synonyms, acceptable German report titles (“Nichtfinanzielle Erklärung”, “Erklärung zur Unternehmensführung” etc.), benign reordering, or tense/voice changes that preserve actor and meaning.
-
-If no fatal error is found, return error_type "None".
-
-If multiple fatal errors exist, choose the most impactful; if tied, prefer "Mistranslation".
-
-## JSON OUTPUT SCHEMA
-json {{ "error_type" : "Mistranslation" | "Omission" | "None", "original_phrase" : "", "translated_phrase": "", "explanation" : "<≤40 words>", "suggestion" : "" }}
-
-## POSITIVE EXAMPLES
-1 · Mistranslation (number)
-EN “Revenue increased by 2.3 million.”
-DE “Der Umsatz stieg um 2,8 Millionen.”
-→ error_type “Mistranslation”, original “2.3 million”, translated “2,8 Millionen”
-
-2 · Mistranslation (polarity)
-EN “The audit is not required.”
-DE “Die Prüfung ist erforderlich.”
-→ error_type “Mistranslation”, original “not required”, translated “erforderlich”
-
-3 · Mistranslation (actor/agency)
-EN “The company was notified by the regulator.”
-DE “Das Unternehmen informierte die Aufsichtsbehörde.”
-→ error_type “Mistranslation”, original “was notified by the regulator”, translated “informierte die Aufsichtsbehörde”
-
-4 · Omission (enumeration/count)
-EN “Both measures will apply: cost cap and hiring freeze.”
-DE “Es gilt die Einstellungsstop.”
-→ error_type “Omission”, original “cost cap”, translated “”
-
-5 · None (acceptable variation)
-EN “The report is comprehensive.”
-DE “Der Bericht ist umfassend.”
-→ error_type “None”
-
-## TEXTS TO AUDIT
-<Original English>
-{eng_text}
-</Original English>
-
-<German Translation>
-{ger_text}
-</German Translation>
-
-## YOUR RESPONSE
-Return the JSON object only—no extra text, no markdown.
-
-## NOTES
-- Compare all numbers, signs, and units (%, bps, million/Mio., billion/Mrd.).
-- Treat passive/active voice as fine unless the responsible actor changes.
-- For omissions, ensure every counted or listed element appears in German.
-- Keep “explanation” concise; “suggestion” should minimally correct the German (or note the missing item).
-"""
-    try:
-        content = chat(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            model=model_name,
-        ).strip()
-
-        j0, j1 = content.find("{"), content.rfind("}") + 1
-        if j0 != -1 and j1 != -1:
-            return json.loads(content[j0:j1])
-        return {"error_type": "System Error",
-                "explanation": "No JSON object in LLM reply."}
-    except Exception as exc:
-        print(f"evaluate_translation_pair → {exc}")
-        return {"error_type": "System Error", "explanation": str(exc)}
-
-def check_context_mismatch(eng_text: str, ger_text: str, model_name: str = None):
-    prompt = f"""
-ROLE: Narrative-Integrity Analyst
-
-Goal: Decide if the German text tells a **different story** from the
-English.  “Different” means a change in
-• WHO does WHAT to WHOM
-• factual outcome or direction of action
-• polarity (e.g. “comprehensive” ↔ “unvollständig”)
-
-Ignore style, word order, or minor re-phrasing.
-
-Respond with JSON:
-
-{{
-  "context_match": "Yes" | "No",
-  "explanation":  "<one concise sentence>"
-}}
-
-Examples
---------
-1) Role reversal (should be No)
-EN  Further, the committee *was informed* by the Board …
-DE  Darüber hinaus *leitete der Ausschuss eine Untersuchung ein* …
-→ roles flipped ⇒ "No"
-
-2) Identical meaning (Yes)
-EN  Declaration of Conformity with the German Corporate Governance Code
-DE  Entsprechenserklärung zum Deutschen Corporate Governance Kodex
-→ "Yes"
-
-Analyse the following text pair and respond with the JSON only.
-
-<Original_English>
-{eng_text}
-</Original_English>
-
-<German_Translation>
-{ger_text}
-</German_Translation>
-"""
-    try:
-        content = chat(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            model=model_name,
-        ).strip()
-
-        j0, j1 = content.find("{"), content.rfind("}") + 1
-        return json.loads(content[j0:j1])
-    except Exception as exc:
-        return {"context_match": "Error", "explanation": str(exc)}
-
-// src/evaluation/pipeline.py
-# src/evaluation/pipeline.py
-import json
-from typing import List, Dict, Any, Optional
-from tqdm import tqdm
-
-from src.evaluation.evaluators import evaluate_translation_pair, check_context_mismatch
-from src.clients.azure_client import chat
-
-__all__ = ["run_evaluation_pipeline"]
-
-AlignedPair = Dict[str, Any]
-EvaluationFinding = Dict[str, Any]
-
-def _agent2_validate_finding(
-    eng_text: str,
-    ger_text: str,
-    error_type: str,
-    explanation: str,
-    model_name: Optional[str] = None,
-):
+def align_content(
+    english_content: List[ContentItem],
+    german_content: List[ContentItem],
+    context_window: int = 0,
+    generate_debug_report: bool = False,
+    debug_report_path: Path = None
+) -> List[AlignedPair]:
     """
-    Second-stage reviewer.  Confirms only truly fatal errors and rejects
-    false positives.
+    Aligns content between documents by breaking them into sections, aligning
+    each section locally, and then combining the results.
     """
-    prompt = f"""
-## ROLE
-**Senior Quality Reviewer** – you are the final gatekeeper of EN→DE
-translation findings.
-
-## TASK
-Decide whether the finding delivered by Agent-1 must be *Confirmed* or
-*Rejected*.
-
-## INSTRUCTIONS
-1. Eligible error_type values are **exactly**:
-   • "Mistranslation"  
-   • "Omission"
-
-2. Confirm only when the evidence is unmistakable:
-   • Mistranslation
-       – number mismatch (digit or word)  
-       – polarity flip / opposite meaning  
-       – actor/role inversion  
-   • Omission
-       – English states an explicit count (“two”, “three”, “both” …) **or**
-         lists concrete items, and at least one item is *truly* missing in
-         German (not conveyed by paraphrase).
-
-3. Reject when:
-   • Difference is stylistic or synonymous.  
-   • Proper names / document titles are rendered with an accepted German
-     equivalent (e.g. “Nichtfinanzielle Erklärung”).  
-   • Alleged omission is actually present via paraphrase.  
-
-## OUTPUT ‑ JSON ONLY
-json {{ "verdict" : "Confirm" | "Reject", "reasoning": "" }}
-
-## MATERIAL TO REVIEW
-English text:
-\"\"\"{eng_text}\"\"\"
-
-German text:
-\"\"\"{ger_text}\"\"\"
-
-Agent-1 proposed:
-  error_type : {error_type}
-  explanation: {explanation}
-
-## YOUR RESPONSE
-Return the JSON object only – no extra text.
-"""
-    try:
-        content = chat(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            model=model_name,
-        )
-        j0, j1 = content.find("{"), content.rfind("}") + 1
-        verdict_json = json.loads(content[j0:j1])
-        is_confirmed = verdict_json.get("verdict", "").lower() == "confirm"
-        reasoning = verdict_json.get("reasoning", "")
-        return is_confirmed, reasoning, content.strip()
-    except (ValueError, json.JSONDecodeError) as exc:
-        print(f"  - Agent-2 JSON parse error: {exc}")
-        return False, f"System error: {exc}", "{}"
-    except Exception as exc:
-        print(f"  - Agent-2 unexpected error: {exc}")
-        return False, "System error (non-parsing issue)", "{}"
-
-def run_evaluation_pipeline(aligned_pairs: List[AlignedPair]) -> List[EvaluationFinding]:
-    findings = []
-
-    for pair in tqdm(aligned_pairs, desc="Evaluating Pairs"):
-        eng_elem = pair.get('english')
-        ger_elem = pair.get('german')
-
-        if eng_elem and not ger_elem:
-            findings.append({
-                "type": f"Omission",
-                "english_text": eng_elem['text'],
-                "german_text": "---",
-                "suggestion": "This content from the English document is missing in the German document.",
-                "page": eng_elem['page']
-            })
-            continue
-
-        if not eng_elem and ger_elem:
-            findings.append({
-                "type": f"Addition",
-                "english_text": "---",
-                "german_text": ger_elem['text'],
-                "suggestion": "This content from the German document does not appear to have a source in the English document.",
-                "page": ger_elem['page']
-            })
-            continue
-
-        if eng_elem and ger_elem:
-            eng_text = eng_elem['text']
-            ger_text = ger_elem['text']
-
-            # Agent 1
-            finding = evaluate_translation_pair(eng_text, ger_text)
-            error_type = finding.get("error_type", "None")
-
-            if error_type not in ["None", "System Error"]:
-                # Agent 2
-                is_confirmed, reasoning, _ = _agent2_validate_finding(
-                    eng_text, ger_text, error_type, finding.get("explanation")
-                )
-
-                if is_confirmed:
-                    findings.append({
-                        "type": error_type,
-                        "english_text": eng_text,
-                        "german_text": ger_text,
-                        "suggestion": finding.get("suggestion"),
-                        "page": eng_elem.get('page'),
-                        "original_phrase": finding.get("original_phrase"),
-                        "translated_phrase": finding.get("translated_phrase")
-                    })
-                else: # Agent 2 rejected, run Agent 3
-                    context_result = check_context_mismatch(eng_text, ger_text)
-                    context_match_verdict = context_result.get('context_match', 'Error')
-                    if context_match_verdict.lower() == "no":
-                        findings.append({
-                            "type": "Context Mismatch",
-                            "english_text": eng_text,
-                            "german_text": ger_text,
-                            "suggestion": context_result.get("explanation"),
-                            "page": eng_elem.get('page')
-                        })
-
-    return findings
-
-// src/processing/json_parser.py
-import json
-from pathlib import Path
-from typing import List, Dict, Any
-import re # <--- NEW IMPORT
-
-import config
-
-# A type alias for our structured content for clarity
-ContentItem = Dict[str, Any]
-
-def _convert_table_to_markdown(table_obj: Dict) -> str:
-    """Converts an Azure table object into a Markdown string."""
-    # ... (function body remains unchanged) ...
-    markdown_str = ""
-    if not table_obj.get('cells'):
-        return ""
-
-    # Create header
-    header_cells = [cell for cell in table_obj['cells'] if cell.get('kind') == 'columnHeader']
-    if header_cells:
-        header_cells.sort(key=lambda x: x['columnIndex'])
-        # Handle cells that might span multiple columns
-        header_content = []
-        for cell in header_cells:
-            content = cell.get('content', '').strip()
-            col_span = cell.get('columnSpan', 1)
-            header_content.extend([content] * col_span)
-        
-        header_row = "| " + " | ".join(header_content) + " |"
-        separator_row = "| " + " | ".join(["---"] * len(header_content)) + " |"
-        markdown_str += header_row + "\n" + separator_row + "\n"
-
-    # Create body rows
-    body_cells = [cell for cell in table_obj['cells'] if cell.get('kind') is None]
-    
-    rows = {}
-    for cell in body_cells:
-        row_idx = cell.get('rowIndex', 0)
-        if row_idx not in rows:
-            rows[row_idx] = []
-        rows[row_idx].append(cell)
-
-    for row_idx in sorted(rows.keys()):
-        row_cells = sorted(rows[row_idx], key=lambda x: x.get('columnIndex', 0))
-        row_str = "| " + " | ".join([cell.get('content', '').strip() for cell in row_cells]) + " |"
-        markdown_str += row_str + "\n"
-        
-    return markdown_str.strip()
-
-
-def extract_canonical_toc_headings(full_text: str) -> List[str]:
-    """
-    Extracts the definite, canonical section headings found in the TOC.
-    This directly implements the user's PyMuPDF/regex logic to get the list of keys.
-    """
-    # Regex patterns provided by the user, modified slightly for robustness:
-    # 1. Main sections (A, B, C, D) e.g., 'A _ To Our Investors' (Must capture only up to the first space after the prefix)
-    main_title_pattern = re.compile(r"^[A-D] _? (.*)")
-    # 2. Numbered sections (e.g., '2 Supervisory Board Report') - Captures the heading text only
-    sub_section_pattern = re.compile(r"^\d+ (.*)")
-    # 3. All-caps headings (e.g., 'FINANCIAL STATEMENTS') - Captures all caps words followed by non-newline characters
-    heading_pattern = re.compile(r"^[A-Z\s]+$")
-
-    canonical_headings = []
-    
-    # Analyze only the first 5000 characters to capture the TOC, avoiding large text analysis
-    toc_text_block = full_text[:5000]
-
-    for line in toc_text_block.split('\n'):
-        line = line.strip()
-        if not line or len(line) < 5: # Ignore very short lines/noise
-            continue
-
-        match = None
-        # Check for A/B/C/D sections
-        if re.match(r"^[A-D] _", line):
-            # Clean the line by stripping everything after the section name (e.g., page numbers, page ranges)
-            # Find the index of the first digit (page number) to cut the string
-            first_digit_index = next((i for i, char in enumerate(line) if char.isdigit()), len(line))
-            
-            # Keep only the structural prefix and the section name
-            cleaned_line = line[:first_digit_index].strip()
-            
-            # Strip trailing garbage/page markers that might not be digits
-            cleaned_line = cleaned_line.replace('Pages', '').replace('Seiten', '').strip()
-            
-            # Only accept lines that look like a clean major A/B/C/D heading
-            if re.match(r"^[A-D] _ [A-Za-z\s]+$", cleaned_line):
-                 match = cleaned_line
-                 
-        # Check for Numbered Sub-Sections (e.g., 2, 8, 11)
-        elif re.match(r"^\d+\s", line):
-            # Use the regex to clean out numbers and trailing page numbers/ranges (e.g., "49 Nature of Operations...Pages 49")
-            # We assume the heading ends before the page number or the word "Pages/Seiten"
-            # In the user's list: "2 Supervisory Board Report", "8 Mandates..."
-            parts = line.split()
-            if len(parts) > 1 and parts[0].isdigit():
-                heading_text = " ".join(parts[1:])
-                # Stop at the first occurrence of "Pages" or a page number indicator
-                final_heading = heading_text.split('Pages')[0].split('Seiten')[0].strip()
-                # Also strip any trailing digits that might be page numbers without the word 'Pages'
-                final_heading = re.sub(r'\s*\d+([\s\-\d]+)?$', '', final_heading).strip()
-                match = final_heading
-                
-        # Check for All-Caps Headings (e.g., FINANCIAL STATEMENTS)
-        elif heading_pattern.match(line) and len(line) > 5 and ' ' in line:
-            match = line
-            
-        if match and match not in canonical_headings:
-            canonical_headings.append(match)
-            
-    return canonical_headings
-
-
-def process_document_json(filepath: Path) -> List[ContentItem]:
-    """
-    Reads and processes an Azure Document Intelligence JSON file,
-    now with dedicated handling for tables.
-    """
-    if not filepath.exists():
-        raise FileNotFoundError(f"The file '{filepath}' was not found.")
-
-    with open(filepath, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    try:
-        analyze_result = data['analyzeResult']
-        full_text_content = analyze_result['content']
-        raw_paragraphs = analyze_result.get('paragraphs', [])
-        pages = analyze_result.get('pages', [])
-        raw_tables = analyze_result.get('tables', [])
-    except KeyError as e:
-        raise ValueError(f"JSON file '{filepath}' is missing expected key: {e}") from e
-    
-    # --- Step 1: Identify all character offsets belonging to tables to avoid duplication ---
-    # ... (rest of Step 1 remains unchanged)
-    table_offsets = set()
-    for table in raw_tables:
-        for span in table.get('spans', []):
-            for i in range(span['offset'], span['offset'] + span['length']):
-                table_offsets.add(i)
-    
-    # Identify all character offsets that are handwritten
-    handwritten_offsets = set()
-    if 'styles' in analyze_result:
-        for style in analyze_result['styles']:
-            if style.get('isHandwritten') and style.get('spans'):
-                for span in style['spans']:
-                    for i in range(span['offset'], span['offset'] + span['length']):
-                        handwritten_offsets.add(i)
-    
-    # Create a quick lookup for page number by span offset
-    page_lookup = {}
-    for page in pages:
-        for span in page.get('spans', []):
-            for i in range(span['offset'], span['offset'] + span['length']):
-                page_lookup[i] = page.get('pageNumber', 0)
-
-    # --- Step 2: Extract all content, including tables, and sort by position ---
-    all_content: List[ContentItem] = []
-
-    # Process PARAGRAPHS
-    for p in raw_paragraphs:
-        role = p.get('role', 'paragraph')
-        if role in config.IGNORED_ROLES or not p.get('spans'):
-            continue
-        
-        offset = p['spans'][0]['offset']
-        # If the paragraph is inside a table or is handwritten, SKIP it.
-        if offset in table_offsets or offset in handwritten_offsets:
-            continue
-            
-        length = p['spans'][0]['length']
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
-        if text:
-            all_content.append({'text': text, 'type': role, 'page': page_number, 'offset': offset})
-            
-    # Process TABLES
-    for table in raw_tables:
-        if not table.get('spans'):
-            continue
-        offset = table['spans'][0]['offset']
-        page_number = page_lookup.get(offset, 0)
-        markdown_table = _convert_table_to_markdown(table)
-        if markdown_table:
-            all_content.append({'text': markdown_table, 'type': 'table', 'page': page_number, 'offset': offset})
-
-    # Sort all extracted content by its character offset to maintain document order
-    all_content.sort(key=lambda x: x['offset'])
-
-    # --- Step 3: Stitch broken paragraphs ---
-    final_content: List[ContentItem] = []
-    stitched_text = ""
-    current_page = 0
-    current_type = "paragraph"
-
-    for i, segment in enumerate(all_content):
-        # If the current element is a table or a structural heading, finalize the previous stitched text.
-        is_standalone = segment['type'] in config.STRUCTURAL_ROLES or segment['type'] == 'table'
-
-        if is_standalone:
-            if stitched_text: # Finalize any pending paragraph
-                final_content.append({'text': stitched_text, 'type': current_type, 'page': current_page})
-                stitched_text = ""
-            final_content.append(segment) # Add the standalone item
-            continue
-
-        # This logic handles stitching of regular paragraphs
-        if not stitched_text: # Start a new paragraph
-            stitched_text = segment['text']
-            current_page = segment['page']
-            current_type = segment['type']
-        else:
-            # If previous text ends with punctuation, start a new paragraph
-            if stitched_text.endswith(('.', '!', '?', ':', '•')):
-                final_content.append({'text': stitched_text, 'type': current_type, 'page': current_page})
-                stitched_text = segment['text']
-                current_page = segment['page']
-                current_type = segment['type']
-            else: # Continue stitching the current paragraph
-                stitched_text += f" {segment['text']}"
-
-    # Add the last stitched paragraph if it exists
-    if stitched_text:
-        final_content.append({'text': stitched_text, 'type': current_type, 'page': current_page})
-        
-    return final_content
-
-// src/processing/toc_parser.py
-# src/processing/toc_parser.py
-
-import re
-from pathlib import Path
-from typing import List, Dict, Any
-import fitz  # PyMuPDF
-
-# A type alias for a structured ToC item
-ToCItem = Dict[str, Any]
-
-def get_toc_text_from_pdf(pdf_path: Path, page_num: int = 1) -> str:
-    """Extracts raw text from a specific page of a PDF file."""
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF file not found at: {pdf_path}")
-    
-    try:
-        with fitz.open(pdf_path) as doc:
-            if page_num < len(doc):
-                page = doc.load_page(page_num)
-                return page.get_text("text")
-            else:
-                raise IndexError(f"Page {page_num} does not exist in the document.")
-    except Exception as e:
-        raise IOError(f"Error opening or reading PDF file '{pdf_path}': {e}") from e
-
-def structure_toc(toc_text: str, page_offset: int = 2) -> List[ToCItem]:
-    """
-    Parses the raw text of a Table of Contents into a structured list of sections,
-    including their titles, start pages, and calculated end pages.
-
-    Args:
-        toc_text: The raw text extracted from the ToC page.
-        page_offset: The number to add to the page numbers found in the ToC
-                     to match the document's actual page numbering (e.g., in the JSON).
-
-    Returns:
-        A list of structured ToC items.
-    """
-    # Regex to find lines that start with a number (page number) followed by text
-    section_pattern = re.compile(r"^\s*(\d+)\s+(.*)")
-    
-    structured_list: List[Dict[str, Any]] = []
-    lines = toc_text.split('\n')
-
-    for line in lines:
-        line = line.strip()
-        match = section_pattern.match(line)
-        if match:
-            page_number_str, title = match.groups()
-            
-            # Clean up title by removing any trailing page ranges or extra artifacts
-            title = re.sub(r'\s+Pages\s+\d+\s*–\s*\d+', '', title).strip()
-            
-            if title:  # Ensure the title is not empty after cleaning
-                structured_list.append({
-                    'title': title,
-                    'start_page': int(page_number_str) + page_offset
-                })
-
-    if not structured_list:
+    if not english_content or not german_content:
         return []
+    
+    # --- Step 1: Create Section Batches ---
+    section_batches, _, _ = create_section_batches(english_content, german_content)
 
-    # Calculate the end_page for each section
-    for i in range(len(structured_list) - 1):
-        # The end page of the current section is one less than the start page of the next
-        structured_list[i]['end_page'] = structured_list[i+1]['start_page'] - 1
+    client = _get_azure_client()
+    all_aligned_pairs: List[AlignedPair] = []
 
-    # Set the end_page for the very last section to a high number to capture all remaining content
-    structured_list[-1]['end_page'] = 999  # Or a more sophisticated document end detection
+    # --- Step 2: Align Each Batch Locally ---
+    print("Aligning content within each section batch...")
+    for eng_batch, ger_batch in tqdm(section_batches, desc="Aligning Batches"):
+        batch_pairs = _align_batch(
+            english_batch=eng_batch,
+            german_batch=ger_batch,
+            client=client,
+            context_window=context_window
+        )
+        all_aligned_pairs.extend(batch_pairs)
 
-    return structured_list
+    # --- Step 3: Generate Optional Debug Report (uses original full lists) ---
+    # This report is now more of a holistic overview. The section-by-section
+    # logic is handled above. For a true debug, one would log each batch's matrices.
+    if generate_debug_report and debug
 
-// src/reporting/excel_writer.py
-# src/reporting/excel_writer.py
-# src/reporting/excel_writer.py
 
+
+# test_1/src/reporting/excel_writer.py
+import io
 from pathlib import Path
 from typing import List, Dict, Any
 import pandas as pd
 import numpy as np
-import re
 
 import config
-import tiktoken
 
-# Type aliases
 AlignedPair = Dict[str, Any]
 EvaluationFinding = Dict[str, Any]
 ContentItem = Dict[str, Any]
 
-# save_alignment_report and save_evaluation_report remain unchanged
 def save_alignment_report(aligned_data: List[AlignedPair], filepath: Path) -> None:
+    # ... (This function remains unchanged) ...
     """Saves the document alignment data to an Excel file."""
     if not aligned_data:
         print("Warning: No aligned data to save to Excel.")
         return
-    # ... (rest of the function is unchanged)
     report_data = []
     for pair in aligned_data:
         eng_item = pair.get('english')
@@ -925,16 +393,17 @@ def save_alignment_report(aligned_data: List[AlignedPair], filepath: Path) -> No
     except Exception as e:
         print(f"Error: Could not write alignment report to '{filepath}'. Reason: {e}")
 
+
 def save_evaluation_report(evaluation_results: List[EvaluationFinding], filepath: Path) -> None:
+    # ... (This function remains unchanged) ...
     """Saves the AI evaluation findings to a separate Excel report."""
     if not evaluation_results:
         print("No evaluation findings to save.")
         return
-    # ... (rest of the function is unchanged)
     evaluation_results.sort(key=lambda x: x.get('page', 0))
     df = pd.DataFrame(evaluation_results)
     desired_columns = [
-        "page", "type", "suggestion", "english_text", "german_text", 
+        "page", "type", "suggestion", "english_text", "german_text",
         "original_phrase", "translated_phrase"
     ]
     final_columns = [col for col in desired_columns if col in df.columns]
@@ -944,397 +413,128 @@ def save_evaluation_report(evaluation_results: List[EvaluationFinding], filepath
     except Exception as e:
         print(f"Error: Could not write evaluation report to '{filepath}'. Reason: {e}")
 
-# NEW: helpers for token counting
-_enc_cache = None
-def _get_encoding(name: str = "text-embedding-3-large"):
-    global _enc_cache
-    if _enc_cache is not None:
-        return _enc_cache
-    try:
-        _enc_cache = tiktoken.encoding_for_model(name)
-    except Exception:
-        _enc_cache = tiktoken.get_encoding("cl100k_base")
-    return _enc_cache
 
-def _count_tokens(text: str) -> int:
-    if not text:
-        return 0
-    enc = _get_encoding()
-    return len(enc.encode(text))
-
-def _create_debug_dataframe(debug_data: Dict[str, Any]) -> pd.DataFrame:
-    """Helper function to create a debug dataframe from raw calculation data."""
-    report_data = []
-
-    # Unpack the data for clarity
-    english_content = debug_data['english_content']
-    german_content = debug_data['german_content']
-    blended_matrix = debug_data['blended_matrix']
-    semantic_matrix = debug_data['semantic_matrix']
-    type_matrix = debug_data['type_matrix']
-    proximity_matrix = debug_data['proximity_matrix']
-
-    if not german_content:
-        return pd.DataFrame([{"Message": "No German content to compare against in this section."}])
-
-    best_ger_indices = np.argmax(blended_matrix, axis=1)
-
-    for i, item in enumerate(english_content):
-        best_match_idx = best_ger_indices[i]
-        best_german_match = german_content[best_match_idx]
-
-        raw_semantic = float(semantic_matrix[i, best_match_idx])
-        raw_type = float(type_matrix[i, best_match_idx])
-        raw_proximity = float(proximity_matrix[i, best_match_idx])
-
-        en_text = item.get('text', '') or ''
-        de_text = best_german_match.get('text', '') or ''
-        en_tokens = _count_tokens(en_text)
-        de_tokens = _count_tokens(de_text)
-
-        report_data.append({
-            "English Text": en_text,
-            "English Type": item.get('type'),
-            "English Page": item.get('page'),
-            "Weighted Semantic": f"{raw_semantic * config.W_SEMANTIC:.4f}",
-            "Weighted Type": f"{raw_type * config.W_TYPE:.4f}",
-            "Weighted Proximity": f"{raw_proximity * config.W_PROXIMITY:.4f}",
-            "Total Score": f"{blended_matrix[i, best_match_idx]:.4f}",
-            "Best Match (German)": de_text,
-            "Best Match Type": best_german_match.get('type'),
-            "Best Match Page No": best_german_match.get('page'),
-            # NEW COLUMNS (appended at the end)
-            "English Tokens": en_tokens,
-            "German Tokens": de_tokens,
-        })
-
-    return pd.DataFrame(report_data)
-
-def save_consolidated_debug_report(
-    all_debug_data: List[Dict[str, Any]], 
+def save_calculation_report(
+    english_content: List[ContentItem],
+    german_content: List[ContentItem],
+    blended_matrix: np.ndarray,
+    semantic_matrix: np.ndarray,
+    type_matrix: np.ndarray,
+    proximity_matrix: np.ndarray,
     filepath: Path
 ):
     """
-    Saves a single, consolidated debug report with a summary sheet and individual
-    sheets for each section's calculations.
+    Saves a highly detailed, two-sheet Excel report showing all alignment score calculations.
     """
-    if not all_debug_data:
-        print("No debug data was generated to save.")
-        return
-
     try:
         with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
-            all_dfs = []
+            # --- Process English Sheet ---
+            eng_report_data = []
+            if blended_matrix.shape[1] > 0:
+                best_ger_indices = np.argmax(blended_matrix, axis=1)
+            else:
+                best_ger_indices = [0] * len(english_content)
 
-            # First, create all the individual section sheets and collect their dataframes
-            for report_info in all_debug_data:
-                df = _create_debug_dataframe(report_info['data'])
-                df.to_excel(writer, sheet_name=report_info['sheet_name'], index=False)
-                all_dfs.append(df)
 
-            # Now, create the consolidated summary sheet
-            summary_df = pd.concat(all_dfs, ignore_index=True)
-            summary_df.sort_values(by="English Page", inplace=True)
+            for i, item in enumerate(english_content):
+                best_match_idx = best_ger_indices[i]
+                best_match_item = german_content[best_match_idx] if german_content else {}
 
-            # Use 'to_excel' on the writer object to add the summary sheet
-            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+                raw_semantic = semantic_matrix[i, best_match_idx] if german_content else 0
+                raw_type = type_matrix[i, best_match_idx] if german_content else 0
+                raw_proximity = proximity_matrix[i, best_match_idx] if german_content else 0
+
+                eng_report_data.append({
+                    # NEW: Added Section Title column for context
+                    "Section Title": item.get('section_title', 'N/A'),
+                    "Text": item['text'],
+                    "Type": item['type'],
+                    "Page No": item['page'],
+                    "Raw Semantic": f"{raw_semantic:.4f}",
+                    "Semantic Calculation": f"{raw_semantic:.4f} x {config.W_SEMANTIC}",
+                    "Weighted Semantic": f"{raw_semantic * config.W_SEMANTIC:.4f}",
+                    "Raw Type": f"{raw_type:.1f}",
+                    "Type Calculation": f"{raw_type:.1f} x {config.W_TYPE}",
+                    "Weighted Type": f"{raw_type * config.W_TYPE:.4f}",
+                    "Raw Proximity": f"{raw_proximity:.4f}",
+                    "Proximity Calculation": f"{raw_proximity:.4f} x {config.W_PROXIMITY}",
+                    "Weighted Proximity": f"{raw_proximity * config.W_PROXIMITY:.4f}",
+                    "Total Score": f"{blended_matrix[i, best_match_idx]:.4f}" if german_content else "N/A",
+                    "Best Match (German)": best_match_item.get('text'),
+                    "Best Match Type": best_match_item.get('type'),
+                    "Best Match Page": best_match_item.get('page')
+                })
+
+            df_eng = pd.DataFrame(eng_report_data)
+            df_eng.to_excel(writer, sheet_name='English Calculations', index=False)
+
+            # --- Process German Sheet ---
+            ger_report_data = []
+            if blended_matrix.shape[0] > 0:
+                best_eng_indices = np.argmax(blended_matrix, axis=0)
+            else:
+                best_eng_indices = [0] * len(german_content)
+
+            for j, item in enumerate(german_content):
+                best_match_idx = best_eng_indices[j]
+                best_match_item = english_content[best_match_idx] if english_content else {}
+
+                raw_semantic = semantic_matrix[best_match_idx, j] if english_content else 0
+                raw_type = type_matrix[best_match_idx, j] if english_content else 0
+                raw_proximity = proximity_matrix[best_match_idx, j] if english_content else 0
+
+                ger_report_data.append({
+                    # NEW: Added Section Title column for context
+                    "Section Title": item.get('section_title', 'N/A'),
+                    "Text": item['text'],
+                    "Type": item['type'],
+                    "Page No": item['page'],
+                    "Raw Semantic": f"{raw_semantic:.4f}",
+                    "Semantic Calculation": f"{raw_semantic:.4f} x {config.W_SEMANTIC}",
+                    "Weighted Semantic": f"{raw_semantic * config.W_SEMANTIC:.4f}",
+                    "Raw Type": f"{raw_type:.1f}",
+                    "Type Calculation": f"{raw_type:.1f} x {config.W_TYPE}",
+                    "Weighted Type": f"{raw_type * config.W_TYPE:.4f}",
+                    "Raw Proximity": f"{raw_proximity:.4f}",
+                    "Proximity Calculation": f"{raw_proximity:.4f} x {config.W_PROXIMITY}",
+                    "Weighted Proximity": f"{raw_proximity * config.W_PROXIMITY:.4f}",
+                    "Total Score": f"{blended_matrix[best_match_idx, j]:.4f}" if english_content else "N/A",
+                    "Best Match (English)": best_match_item.get('text'),
+                    "Best Match Type": best_match_item.get('type'),
+                    "Best Match Page": best_match_item.get('page')
+                })
+
+            df_ger = pd.DataFrame(ger_report_data)
+            df_ger.to_excel(writer, sheet_name='German Calculations', index=False)
 
     except Exception as e:
-        print(f"Error: Could not write consolidated debug report to '{filepath}'. Reason: {e}")
-
-# The old save_calculation_report function is no longer needed and can be removed.
-
-// src/reporting/markdown_writer.py
-from pathlib import Path
-from typing import List, Dict, Any
-
-ContentItem = Dict[str, Any]
-
-def save_to_markdown(content: List[ContentItem], filepath: Path) -> None:
-    with open(filepath, 'w', encoding='utf-8') as f:
-        for item in content:
-            if item['type'] in {'title', 'sectionHeading', 'subheading'}:
-                f.write(f"## {item['text']}\n\n")
-            else:
-                f.write(f"{item['text']}\n\n")
-
-// config.py
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-AZURE_EMBEDDING_ENDPOINT = os.getenv("AZURE_EMBEDDING_ENDPOINT")
-AZURE_EMBEDDING_API_KEY = os.getenv("AZURE_EMBEDDING_API_KEY")
-AZURE_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_EMBEDDING_DEPLOYMENT_NAME")
-AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-02-01")
-
-IGNORED_ROLES = {'pageHeader', 'pageFooter', 'pageNumber'}
-STRUCTURAL_ROLES = {'title', 'sectionHeading'}
-
-W_SEMANTIC = 0.98  # Weight for semantic similarity (cosine score)
-W_TYPE = 0.01      # Weight for matching content types (e.g., table vs. table)
-W_PROXIMITY = 0.01 # Weight for relative position in the document
-
-TYPE_MATCH_BONUS = 0.01
-TYPE_MISMATCH_PENALTY = -0.01
-
-# The minimum blended score for a pair to be considered a match
-SIMILARITY_THRESHOLD = 0.7
-
-INPUT_DIR: str = "input"
-OUTPUT_DIR: str = "output"
-
-// count_tokens_from_json.py
-# scripts/count_tokens_from_json.py
-"""
-Count tiktoken tokens for each text segment in English and German Azure Document Intelligence JSONs.
-
-Usage:
-  python scripts/count_tokens_from_json.py --english-json input/67.pdf.json --german-json input/67g.pdf.json --tiktoken-model text-embedding-3-large --output output/token_counts.csv
-
-What it does:
-- Loads structured content from the provided JSONs using your existing parser (process_document_json).
-- Uses tiktoken to count tokens per text segment.
-- Prints total tokens per language and grand total.
-- Optionally writes per-segment counts to CSV or JSONL.
-
-Notes:
-- The default tokenizer is for "text-embedding-3-large". If unavailable in your tiktoken install, it falls back to "cl100k_base".
-- Add "tiktoken" to your requirements.txt if not already present.
-"""
-
-import argparse
-from pathlib import Path
-from typing import List, Dict, Any
-
-import tiktoken
-import pandas as pd
-
-from src.processing.json_parser import process_document_json
+        print(f"Error: Could not write debug calculation report to '{filepath}'. Reason: {e}")
 
 
-def get_encoding(model_name: str = "text-embedding-3-large"):
+def create_excel_report_in_memory(evaluation_results: List[EvaluationFinding]) -> bytes:
+    # ... (This function remains unchanged) ...
     """
-    Get tiktoken encoding for a given model, with fallback.
+    Creates the evaluation Excel report in memory and returns it as bytes.
     """
-    try:
-        return tiktoken.encoding_for_model(model_name)
-    except Exception:
-        return tiktoken.get_encoding("cl100k_base")
+    if not evaluation_results:
+        return b'' # Return empty bytes if there's nothing to report
 
+    evaluation_results.sort(key=lambda x: x.get('page', 0))
+    df = pd.DataFrame(evaluation_results)
 
-def count_tokens(text: str, enc) -> int:
-    if not text:
-        return 0
-    return len(enc.encode(text))
+    # Define the desired column order for the final report
+    desired_columns = [
+        "page", "type", "suggestion", "english_text", "german_text",
+        "original_phrase", "translated_phrase"
+    ]
+    # Filter the dataframe to only include existing columns in the desired order
+    final_columns = [col for col in desired_columns if col in df.columns]
+    df = df[final_columns]
 
+    # Use an in-memory buffer to save the Excel file
+    output_buffer = io.BytesIO()
+    with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Evaluation_Findings')
 
-def to_rows(content: List[Dict[str, Any]], enc, language: str) -> List[Dict[str, Any]]:
-    rows = []
-    for idx, item in enumerate(content):
-        text = item.get("text", "") or ""
-        tokens = count_tokens(text, enc)
-        rows.append({
-            "language": language,
-            "index": idx,
-            "page": item.get("page", None),
-            "type": item.get("type", ""),
-            "tokens": tokens,
-            "text": text,
-        })
-    return rows
-
-
-def save_output(rows: List[Dict[str, Any]], output_path: Path):
-    if output_path.suffix.lower() == ".jsonl":
-        with open(output_path, "w", encoding="utf-8") as f:
-            for r in rows:
-                # Minimal manual JSON to avoid importing json for speed
-                import json
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        print(f"Saved JSONL to {output_path.resolve()}")
-    else:
-        # Default to CSV (supports .csv and other tabular formats via pandas)
-        df = pd.DataFrame(rows)
-        df.to_csv(output_path, index=False)
-        print(f"Saved CSV to {output_path.resolve()}")
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Count tokens for each text segment in English and German JSONs.")
-    parser.add_argument("--english-json", required=True, type=str, help="Path to English Azure Document Intelligence JSON.")
-    parser.add_argument("--german-json", required=True, type=str, help="Path to German Azure Document Intelligence JSON.")
-    parser.add_argument("--tiktoken-model", type=str, default="text-embedding-3-large", help="Model name for tiktoken encoding.")
-    parser.add_argument("--output", type=str, default=None, help="Optional path to save per-segment counts (CSV or JSONL).")
-    args = parser.parse_args()
-
-    eng_path = Path(args.english_json)
-    ger_path = Path(args.german_json)
-
-    if not eng_path.exists():
-        raise FileNotFoundError(f"English JSON not found: {eng_path}")
-    if not ger_path.exists():
-        raise FileNotFoundError(f"German JSON not found: {ger_path}")
-
-    enc = get_encoding(args.tiktoken_model)
-
-    # Use your existing JSON processor to get structured content
-    eng_content = process_document_json(eng_path)
-    ger_content = process_document_json(ger_path)
-
-    eng_rows = to_rows(eng_content, enc, language="English")
-    ger_rows = to_rows(ger_content, enc, language="German")
-
-    # Totals
-    total_eng_tokens = sum(r["tokens"] for r in eng_rows)
-    total_ger_tokens = sum(r["tokens"] for r in ger_rows)
-    total_tokens_all = total_eng_tokens + total_ger_tokens
-
-    # Print totals (mirroring your requested print style)
-    print(f"The total number of tokens for all strings is {total_tokens_all}.")
-    print(f"English total tokens: {total_eng_tokens}")
-    print(f"German total tokens:  {total_ger_tokens}")
-
-    # Optional output
-    if args.output:
-        all_rows = eng_rows + ger_rows
-        save_output(all_rows, Path(args.output))
-
-
-if __name__ == "__main__":
-    main()
-
-// main.py
-# main.py
-
-import argparse
-import time
-import re
-from pathlib import Path
-from tqdm import tqdm
-
-from dotenv import load_dotenv
-load_dotenv()
-
-import config
-from src.processing.json_parser import process_document_json
-from src.processing.toc_parser import get_toc_text_from_pdf, structure_toc
-from src.alignment.toc_aligner import align_tocs
-from src.alignment.semantic_aligner import align_content # <-- This is the only function needed from here
-from src.reporting.excel_writer import save_alignment_report, save_evaluation_report, save_consolidated_debug_report
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Aligns document content section-by-section using a Table of Contents-first approach."
-    )
-    parser.add_argument("english_pdf", type=str, help="Path to the source English PDF file.")
-    parser.add_argument("german_pdf", type=str, help="Path to the source German PDF file.")
-    parser.add_argument("english_json", type=str, help="Path to the processed English JSON file.")
-    parser.add_argument("german_json", type=str, help="Path to the processed German JSON file.")
-    
-    parser.add_argument("-o", "--output", type=str, default=None, help="Path for the output alignment Excel file.")
-    parser.add_argument("--evaluate", action="store_true", help="Run the AI evaluation pipeline after alignment.")
-    parser.add_argument("--debug-report", action="store_true", help="Generate a single detailed score calculation report with a summary and sheets for each section.")
-    args = parser.parse_args()
-
-    # --- Setup ---
-    eng_pdf_path, ger_pdf_path = Path(args.english_pdf), Path(args.german_pdf)
-    eng_json_path, ger_json_path = Path(args.english_json), Path(args.german_json)
-    output_dir = Path(config.OUTPUT_DIR)
-    output_dir.mkdir(exist_ok=True)
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-
-    print("--- Document Alignment Pipeline Started (ToC-First Approach) ---")
-    
-    # --- Steps 1, 2, 3 are unchanged ---
-    print("Step 1/5: Processing full JSON files...")
-    full_english_content = process_document_json(eng_json_path)
-    full_german_content = process_document_json(ger_json_path)
-    
-    print("\nStep 2/5: Extracting and structuring Tables of Contents from PDFs...")
-    english_toc = structure_toc(get_toc_text_from_pdf(eng_pdf_path, page_num=1))
-    german_toc = structure_toc(get_toc_text_from_pdf(ger_pdf_path, page_num=1))
-
-    print("\nStep 3/5: Aligning ToC sections semantically...")
-    aligned_sections = align_tocs(english_toc, german_toc)
-
-    # --- Step 4: Perform Section-by-Section Content Alignment ---
-    final_aligned_pairs = []
-    all_debug_reports = [] # New list to hold data for the consolidated report
-    print("\nStep 4/5: Performing content alignment for each matched section...")
-    
-    for i, section in enumerate(tqdm(aligned_sections, desc="Aligning Sections"), 1):
-        eng_sec = section['english']
-        ger_sec = section['german']
-        
-        eng_section_content = [item for item in full_english_content if eng_sec['start_page'] <= item['page'] <= eng_sec['end_page']]
-        ger_section_content = [item for item in full_german_content if ger_sec['start_page'] <= item['page'] <= ger_sec['end_page']]
-
-        if not eng_section_content or not ger_section_content:
-            continue
-        
-        aligned_pairs, debug_data = align_content(
-            english_content=eng_section_content,
-            german_content=ger_section_content,
-            generate_debug_report=args.debug_report
-        )
-        final_aligned_pairs.extend(aligned_pairs)
-        
-        if args.debug_report and debug_data:
-            first_two_words = "_".join(eng_sec['title'].split()[:2])
-            sheet_name = f"{i}_{re.sub(r'[^A-Za-z0-9_]', '', first_two_words)} EN"
-            
-            all_debug_reports.append({
-                'sheet_name': sheet_name,
-                'data': debug_data
-            })
-
-    final_aligned_pairs.sort(key=lambda x: (x['english']['page'] if x.get('english') else float('inf')))
-    print(f"-> Alignment complete. Found {len(final_aligned_pairs)} total pairs.\n")
-
-    # --- Step 5: Write Reports ---
-    output_alignment_path = Path(args.output) if args.output else output_dir / f"alignment_report_{timestamp}.xlsx"
-    print("Step 5/5: Writing final reports...")
-    save_alignment_report(final_aligned_pairs, output_alignment_path)
-    print(f"-> Alignment report saved to: {output_alignment_path.resolve()}")
-
-    if args.debug_report:
-        debug_report_path = output_dir / f"debug_report_{timestamp}.xlsx"
-        save_consolidated_debug_report(all_debug_reports, debug_report_path)
-        print(f"-> Consolidated debug report saved to: {debug_report_path.resolve()}\n")
-
-    if args.evaluate:
-        print("Running AI evaluation pipeline...")
-        from src.evaluation.pipeline import run_evaluation_pipeline
-        try:
-            evaluation_results = list(run_evaluation_pipeline(final_aligned_pairs))
-            if evaluation_results:
-                print(f"-> Evaluation complete. Found {len(evaluation_results)} potential errors.")
-                output_eval_path = output_dir / f"evaluation_report_{timestamp}.xlsx"
-                save_evaluation_report(evaluation_results, output_eval_path)
-                print(f"-> Evaluation report saved to: {output_eval_path.resolve()}")
-            else:
-                print("-> Evaluation complete. No significant errors were found.")
-        except Exception as e:
-            print(f"\nAn unexpected error occurred during evaluation: {e}")
-
-    print("\n--- Pipeline Finished Successfully ---")
-
-if __name__ == "__main__":
-    main()
-
-// requirements.txt
-openai
-azure-core
-python-dotenv
-
-# Libraries for data handling and calculations
-numpy
-scikit-learn
-tqdm
-
-# Libraries for dataframes and writing Excel files
-pandas
-openpyxl
-
+    # Retrieve the byte data from the buffer
+    return output_buffer.getvalue()
