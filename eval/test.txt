@@ -1,118 +1,197 @@
-# test_1/main.py
-import argparse
-import time
-from pathlib import Path
-
+# test_1/app.py
 from dotenv import load_dotenv
 load_dotenv()
 
+import streamlit as st
+from datetime import datetime
+import time
+from pathlib import Path
+import os
+
+# --- Import project modules ---
 import config
+from src.clients.doc_intelligence_client import analyze_pdf
 from src.processing.json_parser import process_document_json
+from src.processing.toc_parser import get_toc_text_from_pdf, structure_toc
+from src.alignment.toc_aligner import align_tocs
 from src.alignment.semantic_aligner import align_content
-from src.reporting.markdown_writer import save_to_markdown
-from src.reporting.excel_writer import save_alignment_report, save_evaluation_report
 from src.evaluation.pipeline import run_evaluation_pipeline
+from src.reporting.excel_writer import (
+    create_excel_report_in_memory,
+    save_alignment_report,
+    save_evaluation_report,
+    save_sectionwise_debug_report # Import the new function
+)
+from src.reporting.markdown_writer import save_to_markdown
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Aligns and optionally evaluates content from two Azure Document Intelligence JSON files."
-    )
-    parser.add_argument("english_json", type=str, help="Path to the English JSON file.")
-    parser.add_argument("german_json", type=str, help="Path to the German JSON file.")
-    parser.add_argument(
-        "-o", "--output", type=str, help="Path for the output alignment Excel file.",
-        default=None
-    )
-    parser.add_argument(
-        "--evaluate", action="store_true",
-        help="Run the AI evaluation pipeline after alignment."
-    )
-    parser.add_argument(
-        "--debug-report", action="store_true",
-        help="Generate a detailed alignment report including margin scores."
-    )
-    parser.add_argument(
-        "--context-window", type=int, default=1,
-        help="Size of context window (default: 1 for context-aware embeddings, 0 for no context)."
-    )
-    args = parser.parse_args()
+# --- Helper to save uploaded files temporarily ---
+def save_temp_file(uploaded_file) -> Path:
+    temp_dir = Path("./temp_uploads")
+    temp_dir.mkdir(exist_ok=True)
+    file_path = temp_dir / uploaded_file.name
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return file_path
 
-    # --- 1. Setup Paths ---
-    eng_path = Path(args.english_json)
-    ger_path = Path(args.german_json)
+# --- Page Configuration & UI Functions (unchanged) ---
+st.set_page_config(page_title="Translation Evaluator", layout="wide")
 
-    output_dir = Path(config.OUTPUT_DIR)
-    output_dir.mkdir(exist_ok=True)
+def display_results(results_list: list):
+    """Renders the list of evaluation findings in the Streamlit UI."""
+    if not results_list: return
+    st.subheader(f"Found {len(results_list)} noteworthy items")
+    results_list.sort(key=lambda x: x.get('page', 0))
+    for result in results_list:
+        error_type = result.get('type', 'Info')
+        with st.container(border=True):
+            st.markdown(f"**Page:** `{result.get('page', 'N/A')}` | **Type:** `{error_type}`")
+            original_phrase, translated_phrase = result.get("original_phrase"), result.get("translated_phrase")
+            if original_phrase or translated_phrase:
+                st.markdown("##### 🔍 Error Focus")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Original English Phrase:**"); st.error(f"'{original_phrase or 'N/A'}'")
+                with col2:
+                    st.markdown("**Translated German Phrase:**"); st.warning(f"'{translated_phrase or 'N/A'}'")
+                st.divider()
+            st.markdown("##### Full Text Context")
+            col1, col2 = st.columns(2)
+            with col1: st.markdown(f"> {result['english_text']}")
+            with col2: st.markdown(f"> {result['german_text']}")
+            st.markdown(f"**💡 Suggestion:** {result['suggestion']}")
 
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    base_name = f"{eng_path.stem}_{timestamp}"
+# --- Main App ---
+st.title("📚 Translation Evaluator (ToC-Based)")
+st.markdown("This tool aligns documents section-by-section based on the Table of Contents for improved accuracy.")
+st.divider()
 
-    if args.output:
-        output_alignment_path = Path(args.output)
-    else:
-        output_alignment_path = output_dir / f"alignment_{base_name}.xlsx"
+if 'analysis_complete' not in st.session_state: st.session_state.analysis_complete = False
+if 'evaluation_results' not in st.session_state: st.session_state.evaluation_results = []
+if 'error_message' not in st.session_state: st.session_state.error_message = None
 
-    print("--- Document Alignment Pipeline Started ---")
-    print(f"English Source: {eng_path}")
-    print(f"German Source:  {ger_path}")
-    print(f"Alignment Algorithm: Margin-Based (Best Effort)")
-    print(f"Context Window Size: {args.context_window}\n")
+# --- Sidebar for Inputs and Controls ---
+with st.sidebar:
+    st.header("1. Upload Documents")
+    english_pdf = st.file_uploader("Upload English PDF (Source)", type="pdf", key="eng_pdf")
+    german_pdf = st.file_uploader("Upload German PDF (Translation)", type="pdf", key="ger_pdf")
 
-    try:
-        print("Step 1/4: Processing JSON files...")
-        english_content = process_document_json(eng_path)
-        german_content = process_document_json(ger_path)
-        print(f"-> Extracted {len(english_content)} English segments and {len(german_content)} German segments.\n")
-    except FileNotFoundError as e:
-        print(f"Error: Input file not found. {e}")
-        return
-    except Exception as e:
-        print(f"An error occurred during JSON processing: {e}")
-        return
+    st.header("2. Configure & Run")
+    toc_page_num = st.number_input("ToC Page Number in PDF", min_value=1, max_value=20, value=2) - 1
 
-    print("Step 2/4: Creating verification Markdown files...")
-    save_to_markdown(english_content, output_dir / f"{eng_path.stem}_processed.md")
-    save_to_markdown(german_content, output_dir / f"{ger_path.stem}_processed.md")
-    print(f"-> Markdown files saved in '{output_dir.resolve()}'\n")
+    if st.button("🚀 Run Analysis", disabled=not (english_pdf and german_pdf), type="primary"):
+        st.session_state.analysis_complete = False
+        st.session_state.evaluation_results = []
+        st.session_state.error_message = None
 
-    print("Step 3/4: Performing semantic alignment...")
-    aligned_pairs = align_content(
-        english_content,
-        german_content,
-        context_window=args.context_window,
-    )
-    print(f"-> Alignment complete. Found {len(aligned_pairs)} aligned pairs.\n")
-
-    print("Step 4/4: Writing alignment report(s) to Excel...")
-    save_alignment_report(aligned_pairs, output_alignment_path)
-    print(f"-> Main alignment report saved to: {output_alignment_path.resolve()}")
-    
-    if args.debug_report:
-        debug_report_path = output_dir / f"debug_report_{base_name}.xlsx"
-        # The same function now smartly includes the margin score for the debug report
-        save_alignment_report(aligned_pairs, debug_report_path)
-        print(f"-> Debug report with margin scores saved to: {debug_report_path.resolve()}")
-    print("")
-
-    if args.evaluate:
-        print("Step 5/4: Running AI evaluation pipeline...")
+        output_dir = Path(config.OUTPUT_DIR)
+        output_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"{Path(english_pdf.name).stem}_{timestamp}"
+        
+        eng_temp_path, ger_temp_path = None, None # Define before try block
         try:
-            evaluation_results = list(run_evaluation_pipeline(aligned_pairs))
+            final_aligned_pairs = []
+            section_debug_data = {} # To store data for the debug report
 
-            if not evaluation_results:
-                print("-> Evaluation complete. No significant errors were found.")
-            else:
-                print(f"-> Evaluation complete. Found {len(evaluation_results)} potential errors.")
-                output_eval_path = output_dir / f"evaluation_report_{base_name}.xlsx"
-                save_evaluation_report(evaluation_results, output_eval_path)
-                print(f"-> Evaluation report saved to: {output_eval_path.resolve()}")
+            with st.spinner("Step 1/8: Analyzing PDFs with Azure Document Intelligence..."):
+                eng_json_data = analyze_pdf(english_pdf.getvalue(), english_pdf.name)
+                ger_json_data = analyze_pdf(german_pdf.getvalue(), german_pdf.name)
 
-        except RuntimeError as e:
-            print(f"\nERROR: Could not run evaluation. {e}")
+            with st.spinner("Step 2/8: Processing full document content..."):
+                full_english_content = process_document_json(eng_json_data)
+                full_german_content = process_document_json(ger_json_data)
+
+            with st.spinner("Step 3/8: Extracting and structuring Tables of Contents..."):
+                eng_temp_path = save_temp_file(english_pdf)
+                ger_temp_path = save_temp_file(german_pdf)
+                english_toc = structure_toc(get_toc_text_from_pdf(eng_temp_path, page_num=toc_page_num))
+                german_toc = structure_toc(get_toc_text_from_pdf(ger_temp_path, page_num=toc_page_num))
+
+            with st.spinner("Step 4/8: Aligning ToC sections..."):
+                aligned_sections = align_tocs(english_toc, german_toc)
+                st.toast(f"Matched {len(aligned_sections)} ToC sections.")
+                with st.expander("✅ Matched Sections", expanded=True):
+                    for sec in aligned_sections:
+                        st.write(f"'{sec['english']['title']}' → '{sec['german']['title']}'")
+
+            with st.spinner("Step 5/8: Aligning content for each section..."):
+                progress_bar = st.progress(0, "Aligning sections...")
+                for i, section in enumerate(aligned_sections):
+                    eng_sec, ger_sec = section['english'], section['german']
+
+                    eng_section_content = [item for item in full_english_content if eng_sec['start_page'] <= item['page'] <= eng_sec['end_page']]
+                    ger_section_content = [item for item in full_german_content if ger_sec['start_page'] <= item['page'] <= ger_sec['end_page']]
+
+                    if eng_section_content and ger_section_content:
+                        aligned_pairs_section = align_content(eng_section_content, ger_section_content, context_window=1)
+                        final_aligned_pairs.extend(aligned_pairs_section)
+                        # Store results for debug report
+                        section_debug_data[eng_sec['title']] = aligned_pairs_section
+
+                    progress_bar.progress((i + 1) / len(aligned_sections), f"Aligned '{eng_sec['title']}'")
+            
+            with st.spinner("Step 6/8: Saving alignment and debug reports..."):
+                final_aligned_pairs.sort(key=lambda x: (x['english']['page'] if x.get('english') else float('inf')))
+                
+                alignment_report_path = output_dir / f"alignment_{base_filename}.xlsx"
+                save_alignment_report(final_aligned_pairs, alignment_report_path)
+                st.toast("Saved Main Alignment Report.")
+
+                debug_report_path = output_dir / f"debug_report_{base_filename}.xlsx"
+                save_sectionwise_debug_report(section_debug_data, debug_report_path)
+                st.toast("Saved Section-wise Debug Report.")
+
+
+            with st.spinner("Step 7/8: Evaluating aligned pairs for errors..."):
+                st.session_state.evaluation_results = list(run_evaluation_pipeline(final_aligned_pairs))
+
+            with st.spinner("Step 8/8: Saving evaluation report..."):
+                if st.session_state.evaluation_results:
+                    eval_report_path = output_dir / f"evaluation_{base_filename}.xlsx"
+                    save_evaluation_report(st.session_state.evaluation_results, eval_report_path)
+                    st.toast("Saved Evaluation Report.")
+
+            st.session_state.analysis_complete = True
+            st.success("Analysis pipeline finished successfully!")
+            time.sleep(2)
+            st.rerun()
+
         except Exception as e:
-            print(f"\nAn unexpected error occurred during evaluation: {e}")
+            st.session_state.error_message = f"An error occurred: {e}"
+            st.exception(e) # Also show traceback in the terminal for debugging
+            st.rerun()
+        
+        finally:
+            # --- GUARANTEED CLEANUP ---
+            # This block runs whether the try block succeeds or fails
+            if eng_temp_path and eng_temp_path.exists():
+                os.remove(eng_temp_path)
+            if ger_temp_path and ger_temp_path.exists():
+                os.remove(ger_temp_path)
 
-    print("\n--- Pipeline Finished Successfully ---")
 
-if __name__ == "__main__":
-    main()
+    # --- Download Button ---
+    st.header("3. Export Results")
+    if st.session_state.analysis_complete and st.session_state.evaluation_results:
+        excel_data = create_excel_report_in_memory(st.session_state.evaluation_results)
+        st.download_button(
+            label="📥 Download Evaluation Report",
+            data=excel_data,
+            file_name=f"Translation_Evaluation_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    else:
+        st.markdown("_Report available after analysis._")
+
+# --- Main Display Area ---
+st.header("Evaluation Results")
+
+if st.session_state.error_message:
+    st.error(st.session_state.error_message, icon="🚨")
+elif st.session_state.analysis_complete:
+    if not st.session_state.evaluation_results:
+        st.success("✅ Analysis complete. No significant errors were found.")
+    else:
+        display_results(st.session_state.evaluation_results)
+else:
+    st.info("Upload your PDFs and click 'Run Analysis' to begin.")
