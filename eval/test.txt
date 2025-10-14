@@ -1,202 +1,32 @@
-# test_1/src/alignment/semantic_aligner.py
-from typing import List, Dict, Any, Tuple
-from pathlib import Path
-import numpy as np
-from openai import AzureOpenAI
-from tqdm import tqdm
-import faiss
+# test_1/config.py
+import os
+from dotenv import load_dotenv
 
-import config
-# Use the central Azure client now
-from src.clients.azure_client import get_embedding_client
+load_dotenv()
 
-# Type Aliases for clarity
-ContentItem = Dict[str, Any]
-AlignedPair = Dict[str, Any]
+AZURE_EMBEDDING_ENDPOINT = os.getenv("AZURE_EMBEDDING_ENDPOINT")
+AZURE_EMBEDDING_API_KEY = os.getenv("AZURE_EMBEDDING_API_KEY")
+AZURE_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_EMBEDDING_DEPLOYMENT_NAME")
+AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-02-01")
 
+IGNORED_ROLES = {'pageHeader', 'pageFooter', 'pageNumber'}
+STRUCTURAL_ROLES = {'title', 'sectionHeading'}
 
-def _get_embeddings_in_batches(
-    texts: List[str],
-    content_items: List[ContentItem],
-    client: AzureOpenAI, # Now accepts the client as an argument
-    batch_size: int = 16,
-    context_window: int = 0
-) -> np.ndarray:
-    """
-    Generates embeddings by sending texts to the Azure API in batches.
-    Optionally includes context from surrounding segments.
-    """
-    if context_window > 0:
-        texts_with_context = []
-        for i, text in enumerate(texts):
-            pre_context = "".join([f"{content_items[j]['text']} " for j in range(max(0, i - context_window), i)])
-            post_context = "".join([f" {content_items[j]['text']}" for j in range(i + 1, min(len(texts), i + context_window + 1))])
-            content_type = content_items[i]['type']
-            page_num = content_items[i]['page']
-            context_text = f"{pre_context}[SEP]{text}[SEP]{post_context} [TYPE:{content_type}] [PAGE:{page_num}]".strip()
-            texts_with_context.append(context_text)
-        texts_to_embed = texts_with_context
-    else:
-        texts_to_embed = texts
+W_SEMANTIC = 1  # Weight for semantic similarity (cosine score)
+W_TYPE = 0      # Weight for matching content types (e.g., table vs. table)
+W_PROXIMITY = 0 # Weight for relative position in the document
 
-    all_embeddings = []
-    for i in tqdm(range(0, len(texts_to_embed), batch_size), desc="Generating Embeddings"):
-        batch = texts_to_embed[i:i + batch_size]
-        try:
-            response = client.embeddings.create(input=batch, model=config.AZURE_EMBEDDING_DEPLOYMENT_NAME)
-            batch_embeddings = [item.embedding for item in response.data]
-            all_embeddings.extend(batch_embeddings)
-        except Exception as e:
-            print(f"An error occurred while processing a batch: {e}")
-            # Use the correct embedding dimension for your model (e.g., 3072 for text-embedding-3-large)
-            all_embeddings.extend([[0.0] * 3072] * len(batch))
+TYPE_MATCH_BONUS = 0.1
+TYPE_MISMATCH_PENALTY = -0.2
 
-    return np.array(all_embeddings, dtype='float32')
+# --- UPDATED THRESHOLDS TO FORCE PAIRING ---
+# A very low threshold ensures that the best possible match is always kept,
+# regardless of its quality. This forces a comprehensive pairing.
+SIMILARITY_THRESHOLD = -1.0
+
+# The minimum margin score for a pair to be considered. Set to -1.0 to accept all pairs.
+MARGIN_SCORE_THRESHOLD = -1.0
 
 
-def _score_candidates_vectorized(
-    x: np.ndarray,
-    y: np.ndarray,
-    ind: np.ndarray,
-    x_mean: np.ndarray,
-    y_mean: np.ndarray
-) -> np.ndarray:
-    """
-    Calculates margin scores for candidates using vectorized NumPy operations for high performance.
-    """
-    # 1. Use advanced indexing to get the embeddings of all 'k' neighbors
-    y_neighbors = y[ind]
-
-    # 2. Calculate dot product (cosine similarity) for all pairs at once using einsum
-    cosine_similarities = np.einsum('ik,ijk->ij', x, y_neighbors)
-
-    # 3. Get the mean similarity of the neighbors
-    y_mean_neighbors = y_mean[ind]
-
-    # 4. Calculate the average of source and target mean similarities
-    avg_mean_sim = (x_mean[:, np.newaxis] + y_mean_neighbors) / 2
-
-    # 5. Calculate the margin score for all candidates. Add epsilon to avoid division by zero.
-    margin = lambda a, b: a / b
-    scores = margin(cosine_similarities, avg_mean_sim + 1e-9)
-
-    return scores
-
-
-def _calculate_margin_scores_and_matches(
-    source_embeds: np.ndarray,
-    target_embeds: np.ndarray,
-    k: int = 4
-) -> List[Tuple[int, int, float, float]]:
-    """
-    Calculates alignment scores using the margin method and returns the best 1-to-1 matches.
-    Now also returns the original cosine similarity to avoid redundant calculations.
-    """
-    # 1. Normalize embeddings for cosine similarity
-    source_embeds = source_embeds / np.linalg.norm(source_embeds, axis=1, keepdims=True)
-    target_embeds = target_embeds / np.linalg.norm(target_embeds, axis=1, keepdims=True)
-
-    # 2. Find k-Nearest Neighbors (kNN) using FAISS
-    index_target = faiss.IndexFlatIP(target_embeds.shape[1])
-    index_target.add(target_embeds)
-    sim_fwd, ind_fwd = index_target.search(source_embeds, k)
-
-    index_source = faiss.IndexFlatIP(source_embeds.shape[1])
-    index_source.add(source_embeds)
-    sim_bwd, ind_bwd = index_source.search(target_embeds, k)
-
-    # 3. Calculate mean similarities
-    mean_fwd_sim = sim_fwd.mean(axis=1)
-    mean_bwd_sim = sim_bwd.mean(axis=1)
-
-    # 4. Calculate margin scores using the new vectorized function
-    scores_fwd = _score_candidates_vectorized(source_embeds, target_embeds, ind_fwd, mean_fwd_sim, mean_bwd_sim)
-    scores_bwd = _score_candidates_vectorized(target_embeds, source_embeds, ind_bwd, mean_bwd_sim, mean_fwd_sim)
-
-    # 5. Find the best matches
-    fwd_best_idx = ind_fwd[np.arange(source_embeds.shape[0]), scores_fwd.argmax(axis=1)]
-    bwd_best_idx = ind_bwd[np.arange(target_embeds.shape[0]), scores_bwd.argmax(axis=1)]
-
-    # 6. Combine and enforce 1-to-1 mapping
-    potential_matches = []
-    fwd_scores_max = scores_fwd.max(axis=1)
-    fwd_scores_argmax = scores_fwd.argmax(axis=1)
-
-    for i in range(source_embeds.shape[0]):
-        cosine_sim = sim_fwd[i, fwd_scores_argmax[i]]
-        potential_matches.append((i, fwd_best_idx[i], fwd_scores_max[i], cosine_sim))
-
-    bwd_scores_max = scores_bwd.max(axis=1)
-    bwd_scores_argmax = scores_bwd.argmax(axis=1)
-    for i in range(target_embeds.shape[0]):
-        cosine_sim = sim_bwd[i, bwd_scores_argmax[i]]
-        potential_matches.append((bwd_best_idx[i], i, bwd_scores_max[i], cosine_sim))
-
-    potential_matches.sort(key=lambda x: x[2], reverse=True) # Sort by margin score
-
-    final_matches = []
-    seen_source = set()
-    seen_target = set()
-    for src_idx, trg_idx, margin_score, cos_sim in potential_matches:
-        if src_idx not in seen_source and trg_idx not in seen_target:
-            final_matches.append((src_idx, trg_idx, margin_score, cos_sim))
-            seen_source.add(src_idx)
-            seen_target.add(trg_idx)
-
-    return final_matches
-
-
-def align_content(
-    english_content: List[ContentItem],
-    german_content: List[ContentItem],
-    context_window: int = 0
-) -> List[AlignedPair]:
-    """
-    Aligns content using margin-based scoring, forcing a pair for all possible items.
-    """
-    if not english_content or not german_content:
-        return []
-
-    client = get_embedding_client() # Use the central client
-
-    # 1. Get embeddings
-    english_embeddings = _get_embeddings_in_batches(
-        [item['text'] for item in english_content], english_content, client, context_window=context_window
-    )
-    german_embeddings = _get_embeddings_in_batches(
-        [item['text'] for item in german_content], german_content, client, context_window=context_window
-    )
-
-    # 2. Get the best 1-to-1 matches using the new margin-based method
-    print("Finding best 1-to-1 matches using margin-based scoring...")
-    best_matches = _calculate_margin_scores_and_matches(english_embeddings, german_embeddings)
-
-    # 3. Create the list of aligned pairs
-    aligned_pairs: List[AlignedPair] = []
-    used_english_indices = set()
-    used_german_indices = set()
-
-    for eng_idx, ger_idx, margin_score, cos_sim in best_matches:
-        if (cos_sim >= config.SIMILARITY_THRESHOLD and margin_score >= config.MARGIN_SCORE_THRESHOLD):
-            aligned_pairs.append({
-                "english": english_content[eng_idx],
-                "german": german_content[ger_idx],
-                "similarity": float(cos_sim),
-                "margin_score": float(margin_score) # Add margin score for debug reports
-            })
-            used_english_indices.add(eng_idx)
-            used_german_indices.add(ger_idx)
-
-    # 4. Add unmatched content
-    for i, item in enumerate(english_content):
-        if i not in used_english_indices:
-            aligned_pairs.append({"english": item, "german": None, "similarity": 0.0, "margin_score": 0.0})
-
-    for i, item in enumerate(german_content):
-        if i not in used_german_indices:
-            aligned_pairs.append({"english": None, "german": item, "similarity": 0.0, "margin_score": 0.0})
-
-    # 5. Sort the final list by the English document page order
-    aligned_pairs.sort(key=lambda x: x['english']['page'] if x.get('english') else float('inf'))
-
-    return aligned_pairs
+INPUT_DIR: str = "input"
+OUTPUT_DIR: str = "output"
