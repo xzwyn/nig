@@ -1,32 +1,55 @@
-# test_1/config.py
-import os
-from dotenv import load_dotenv
+streamlit run app.py
 
-load_dotenv()
+  You can now view your Streamlit app in your browser.
 
-AZURE_EMBEDDING_ENDPOINT = os.getenv("AZURE_EMBEDDING_ENDPOINT")
-AZURE_EMBEDDING_API_KEY = os.getenv("AZURE_EMBEDDING_API_KEY")
-AZURE_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_EMBEDDING_DEPLOYMENT_NAME")
-AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-02-01")
+  Local URL: http://localhost:8503
+  Network URL: http://192.168.1.7:8503
 
-IGNORED_ROLES = {'pageHeader', 'pageFooter', 'pageNumber'}
-STRUCTURAL_ROLES = {'title', 'sectionHeading'}
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\e
+  xec_code.py:128 in exec_func_with_error_handling
 
-W_SEMANTIC = 1  # Weight for semantic similarity (cosine score)
-W_TYPE = 0      # Weight for matching content types (e.g., table vs. table)
-W_PROXIMITY = 0 # Weight for relative position in the document
+  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\s
+  cript_runner.py:669 in code_to_exec
 
-TYPE_MATCH_BONUS = 0.1
-TYPE_MISMATCH_PENALTY = -0.2
+  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\app.py:17 in <module>
 
-# --- UPDATED THRESHOLDS TO FORCE PAIRING ---
-# A very low threshold ensures that the best possible match is always kept,
-# regardless of its quality. This forces a comprehensive pairing.
-SIMILARITY_THRESHOLD = -1.0
+     14 from src.processing.json_parser import process_document_json
+     15 from src.processing.toc_parser import get_toc_text_from_pdf, structure_toc
+     16 from src.alignment.toc_aligner import align_tocs
+  ❱  17 from src.alignment.semantic_aligner import align_content
+     18 from src.evaluation.pipeline import run_evaluation_pipeline
+     19 from src.reporting.excel_writer import (
+     20 │   create_excel_report_in_memory,
 
-# The minimum margin score for a pair to be considered. Set to -1.0 to accept all pairs.
-MARGIN_SCORE_THRESHOLD = -1.0
+  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\src\alignment\semantic_aligner.py:10 in
+  <module>
 
+      7 
+      8 import config
+      9 # Use the central Azure client now
+  ❱  10 from src.clients.azure_client import get_embedding_client
+     11 
+     12 # Type Aliases for clarity
+     13 ContentItem = Dict[str, Any]
+────────────────────────────────────────────────────────────────────────────────────────
+ImportError: cannot import name 'get_embedding_client' from 'src.clients.azure_client'
+(C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\src\clients\azure_client.py)
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\e
+  xec_code.py:128 in exec_func_with_error_handling
 
-INPUT_DIR: str = "input"
-OUTPUT_DIR: str = "output"
+  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\s
+  cript_runner.py:669 in code_to_exec
+
+  C:\Users\M3ZEDTZ\Downloads\test_ev\test_1\app.py:17 in <module>
+
+     14 from src.processing.json_parser import process_document_json
+     15 from src.processing.toc_parser import get_toc_text_from_pdf, structure_toc
+     16 from src.alignment.toc_aligner import align_tocs
+  ❱  17 from src.alignment.semantic_aligner import align_content
+     18 from src.evaluation.pipeline import run_evaluation_pipeline
+     19 from src.reporting.excel_writer import (
+     20 │   create_excel_report_in_memory,
+────────────────────────────────────────────────────────────────────────────────────────
+ImportError: cannot import name 'align_content' from 'src.alignment.semantic_aligner'
