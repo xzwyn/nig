@@ -1,19 +1,11 @@
-# test_1/src/processing/toc_parser.py
-import re
-from pathlib import Path
-from typing import List, Dict, Any
-import fitz  # PyMuPDF
-
-# A type alias for a structured ToC item
-ToCItem = Dict[str, Any]
-
-def get_toc_text_from_pdf(pdf_path: Path, page_num: int = 1) -> str:
-    """Extracts raw text from a specific page of a PDF file."""
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF file not found at: {pdf_path}")
-
+def get_toc_text_from_pdf_bytes(pdf_bytes: bytes, page_num: int = 1) -> str:
+    """Extracts raw text from a specific page of a PDF file in memory."""
+    if not pdf_bytes:
+        raise ValueError("PDF bytes are empty.")
+    
     try:
-        with fitz.open(pdf_path) as doc:
+        # Open PDF from memory stream
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
             if page_num < len(doc):
                 page = doc.load_page(page_num)
                 return page.get_text("text")
@@ -23,47 +15,5 @@ def get_toc_text_from_pdf(pdf_path: Path, page_num: int = 1) -> str:
                 page = doc.load_page(0)
                 return page.get_text("text")
     except Exception as e:
-        raise IOError(f"Error opening or reading PDF file '{pdf_path}': {e}") from e
-
-def structure_toc(toc_text: str) -> List[ToCItem]:
-    """
-    Parses the raw text of a Table of Contents into a structured list of sections,
-    including their titles and start pages.
-    """
-    # Regex to find lines starting with a number (page number) followed by text
-    section_pattern = re.compile(r"^\s*(\d+)\s+(.*)")  # ← CHANGED
-
-    structured_list: List[ToCItem] = []
-    lines = toc_text.split('\n')
-
-    for line in lines:
-        line = line.strip()
-        if not line or len(line) < 3:
-            continue
-
-        match = section_pattern.match(line)
-        if match:
-            page_number_str, title = match.groups()  # ← CHANGED ORDER
-
-            # Further clean the title from leading numbers/bullets
-            title = re.sub(r"^\s*([A-D]|\d{1,2}[\.\s])\s*[_]?\s*", "", title).strip()
-
-            if title and len(title) > 4:
-                structured_list.append({
-                    'title': title,
-                    'start_page': int(page_number_str)
-                })
-
-    if not structured_list:
-        return []
-
-    # Sort by start page to ensure correct order
-    structured_list.sort(key=lambda x: x['start_page'])
-
-    # Calculate the end_page for each section
-    for i in range(len(structured_list) - 1):
-        structured_list[i]['end_page'] = structured_list[i+1]['start_page'] - 1
-
-    structured_list[-1]['end_page'] = 999
-
-    return structured_list
+        raise IOError(f"Error opening or reading PDF bytes: {e}") from e
+# --- END NEW FUNCTION ---
