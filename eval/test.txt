@@ -1,205 +1,198 @@
-// test_1/src/processing/json_parser.py
-# test_1/src/processing/json_parser.py
-import json
+// test_1/app.py
+# test_1/app.py
+from dotenv import load_dotenv
+load_dotenv()
+
+import streamlit as st
+from datetime import datetime
+import time
 from pathlib import Path
-from typing import List, Dict, Any
+import os # <-- No longer needed for file cleanup
 
+# --- Import project modules ---
 import config
+from src.clients.doc_intelligence_client import analyze_pdf
+from src.processing.json_parser import process_document_json
+# --- FIX for Flaw 3: Import new function and remove old one ---
+from src.processing.toc_parser import get_toc_text_from_pdf_bytes, structure_toc
+# --- END FIX ---
+from src.alignment.toc_aligner import align_tocs
+from src.alignment.semantic_aligner import align_content
+from src.evaluation.pipeline import run_evaluation_pipeline
+from src.reporting.excel_writer import (
+    create_excel_report_in_memory,
+    save_alignment_report,
+    save_evaluation_report,
+    save_sectionwise_debug_report # Import the new function
+)
+from src.reporting.markdown_writer import save_to_markdown
 
-# A type alias for our structured content for clarity
-ContentItem = Dict[str, Any]
-
-# --- FIX for Flaw 7: Robust table conversion ---
-def _convert_table_to_markdown(table_obj: Dict) -> str:
-    """Converts an Azure table object into a Markdown string, handling row/col spans."""
-    if not table_obj.get('cells'):
-        return ""
-
-    row_count = table_obj.get('rowCount', 0)
-    col_count = table_obj.get('columnCount', 0)
-    
-    if row_count == 0 or col_count == 0:
-        # Cannot process table without dimensions, return raw content if possible
-        spans = table_obj.get('spans', [])
-        if spans:
-            # This requires access to the full document content, which this function doesn't have.
-            # Returning empty is the safest fallback.
-            return ""
-        return ""
-
-    # A grid to hold the final text content
-    grid = [["" for _ in range(col_count)] for _ in range(row_count)]
-    # A shadow grid to track occupied cells (due to spans)
-    occupied = [[False for _ in range(col_count)] for _ in range(row_count)]
-    
-    header_row_indices = set()
-    
-    # Sort cells to process top-left ones first, ensuring consistent filling
-    cells = sorted(table_obj.get('cells', []), key=lambda x: (x.get('rowIndex', 0), x.get('columnIndex', 0)))
-
-    for cell in cells:
-        r = cell.get('rowIndex', 0)
-        c = cell.get('columnIndex', 0)
-        
-        # Skip anomalous cells outside the defined grid
-        if r >= row_count or c >= col_count:
-            continue
-
-        # Find the next available column in the current row if this one is occupied
-        while c < col_count and occupied[r][c]:
-            c += 1
-        
-        if c >= col_count:
-            continue # Row is full, this cell is anomalous
-
-        content = cell.get('content', '').strip().replace('\n', ' ') # Clean content
-        row_span = cell.get('rowSpan', 1)
-        col_span = cell.get('columnSpan', 1)
-        
-        # Place the content in the grid
-        grid[r][c] = content
-        
-        # Mark all cells covered by this span as occupied
-        for i in range(r, min(r + row_span, row_count)):
-            for j in range(c, min(c + col_span, col_count)):
-                occupied[i][j] = True
-        
-        if cell.get('kind') == 'columnHeader':
-            # Mark all rows this header cell spans as part of the header
-            for i in range(r, min(r + row_span, row_count)):
-                header_row_indices.add(i)
-
-    markdown_str = ""
-    separator_generated = False
-    
-    # Now, build the markdown string from the grid
-    for r_idx in range(row_count):
-        # Filter out cells that were "occupied" but not the start of a span
-        # No, we need all cells for the final grid structure.
-        row_cells = [grid[r_idx][c_idx] for c_idx in range(col_count)]
-        markdown_str += "| " + " | ".join(row_cells) + " |\n"
-        
-        # If this was a header row, and we haven't made the separator yet, add it
-        if r_idx in header_row_indices and not separator_generated:
-            # Check if the *next* row is NOT a header row
-            if (r_idx + 1) >= row_count or (r_idx + 1) not in header_row_indices:
-                markdown_str += "| " + " | ".join(["---"] * col_count) + " |\n"
-                separator_generated = True
-                
-    # In case the *only* row was a header row
-    if not separator_generated and len(header_row_indices) > 0:
-        markdown_str += "| " + " | ".join(["---"] * col_count) + " |\n"
-
-
-    return markdown_str.strip()
+# --- FIX for Flaw 3: Remove save_temp_file helper function ---
+# (The save_temp_file function is no longer needed)
 # --- END FIX ---
 
+# --- Page Configuration & UI Functions (unchanged) ---
+st.set_page_config(page_title="Translation Evaluator", layout="wide")
 
-def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
-    # Allow passing a file path or a preloaded dict
-    if isinstance(doc_intelligence_data, (str, Path)):
-        with open(Path(doc_intelligence_data), 'r', encoding='utf-8') as f:
-            doc_intelligence_data = json.load(f)
+def display_results(results_list: list):
+    """Renders the list of evaluation findings in the Streamlit UI."""
+    if not results_list: return
+    st.subheader(f"Found {len(results_list)} noteworthy items")
+    results_list.sort(key=lambda x: x.get('page', 0))
+    for result in results_list:
+        error_type = result.get('type', 'Info')
+        with st.container(border=True):
+            st.markdown(f"**Page:** `{result.get('page', 'N/A')}` | **Type:** `{error_type}`")
+            original_phrase, translated_phrase = result.get("original_phrase"), result.get("translated_phrase")
+            if original_phrase or translated_phrase:
+                st.markdown("##### 🔍 Error Focus")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Original English Phrase:**"); st.error(f"'{original_phrase or 'N/A'}'")
+                with col2:
+                    st.markdown("**Translated German Phrase:**"); st.warning(f"'{translated_phrase or 'N/A'}'")
+                st.divider()
+            st.markdown("##### Full Text Context")
+            col1, col2 = st.columns(2)
+            with col1: st.markdown(f"> {result['english_text']}")
+            with col2: st.markdown(f"> {result['german_text']}")
+            st.markdown(f"**💡 Suggestion:** {result['suggestion']}")
 
-    try:
-        analyze_result = doc_intelligence_data['analyzeResult']
-        full_text_content = analyze_result['content']
-        raw_paragraphs = analyze_result.get('paragraphs', [])
-        pages = analyze_result.get('pages', [])
-        raw_tables = analyze_result.get('tables', [])
-    except KeyError as e:
-        raise ValueError(f"Document Intelligence data is missing expected key: {e}") from e
+# --- Main App ---
+st.title("📚 Translation Evaluator (ToC-Based)")
+st.markdown("This tool aligns documents section-by-section based on the Table of Contents for improved accuracy.")
+st.divider()
 
-    # --- Step 1: Identify all character offsets belonging to tables to avoid duplication ---
-    table_offsets = set()
-    for table in raw_tables:
-        for span in table.get('spans', []):
-            for i in range(span['offset'], span['offset'] + span['length']):
-                table_offsets.add(i)
+if 'analysis_complete' not in st.session_state: st.session_state.analysis_complete = False
+if 'evaluation_results' not in st.session_state: st.session_state.evaluation_results = []
+if 'error_message' not in st.session_state: st.session_state.error_message = None
 
-    # Identify all character offsets that are handwritten
-    handwritten_offsets = set()
-    if 'styles' in analyze_result:
-        for style in analyze_result['styles']:
-            if style.get('isHandwritten') and style.get('spans'):
-                for span in style['spans']:
-                    for i in range(span['offset'], span['offset'] + span['length']):
-                        handwritten_offsets.add(i)
+# --- Sidebar for Inputs and Controls ---
+with st.sidebar:
+    st.header("1. Upload Documents")
+    english_pdf = st.file_uploader("Upload English PDF (Source)", type="pdf", key="eng_pdf")
+    german_pdf = st.file_uploader("Upload German PDF (Translation)", type="pdf", key="ger_pdf")
 
-    # Create a quick lookup for page number by span offset
-    page_lookup = {}
-    for page in pages:
-        for span in page.get('spans', []):
-            for i in range(span['offset'], span['offset'] + span['length']):
-                page_lookup[i] = page.get('pageNumber', 0)
+    st.header("2. Configure & Run")
+    toc_page_num = st.number_input("ToC Page Number in PDF", min_value=1, max_value=20, value=2) - 1
 
-    # --- Step 2: Extract all content, including tables, and sort by position ---
-    all_content: List[ContentItem] = []
+    if st.button("🚀 Run Analysis", disabled=not (english_pdf and german_pdf), type="primary"):
+        st.session_state.analysis_complete = False
+        st.session_state.evaluation_results = []
+        st.session_state.error_message = None
 
-    # Process PARAGRAPHS
-    for p in raw_paragraphs:
-        role = p.get('role', 'paragraph')
-        if role in config.IGNORED_ROLES or not p.get('spans'):
-            continue
+        output_dir = Path(config.OUTPUT_DIR)
+        output_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"{Path(english_pdf.name).stem}_{timestamp}"
+        
+        # --- FIX for Flaw 3: Remove temp file variables ---
+        # (No longer need eng_temp_path, ger_temp_path)
+        # --- END FIX ---
+        try:
+            final_aligned_pairs = []
+            section_debug_data = {} # To store data for the debug report
 
-        offset = p['spans'][0]['offset']
-        # If the paragraph is inside a table or is handwritten, SKIP it.
-        if offset in table_offsets or offset in handwritten_offsets:
-            continue
+            with st.spinner("Step 1/8: Analyzing PDFs with Azure Document Intelligence..."):
+                # --- FIX for Flaw 3: Get bytes here ---
+                eng_pdf_bytes = english_pdf.getvalue()
+                ger_pdf_bytes = german_pdf.getvalue()
+                eng_json_data = analyze_pdf(eng_pdf_bytes, english_pdf.name)
+                ger_json_data = analyze_pdf(ger_pdf_bytes, german_pdf.name)
+                # --- END FIX ---
 
-        length = p['spans'][0]['length']
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
-        if text:
-            all_content.append({'text': text, 'type': role, 'page': page_number, 'offset': offset})
+            with st.spinner("Step 2/8: Processing full document content..."):
+                full_english_content = process_document_json(eng_json_data)
+                full_german_content = process_document_json(ger_json_data)
 
-    # Process TABLES
-    for table in raw_tables:
-        if not table.get('spans'):
-            continue
-        offset = table['spans'][0]['offset']
-        page_number = page_lookup.get(offset, 0)
-        markdown_table = _convert_table_to_markdown(table)
-        if markdown_table:
-            all_content.append({'text': markdown_table, 'type': 'table', 'page': page_number, 'offset': offset})
+            with st.spinner("Step 3/8: Extracting and structuring Tables of Contents..."):
+                # --- FIX for Flaw 3: Use bytes directly ---
+                english_toc = structure_toc(get_toc_text_from_pdf_bytes(eng_pdf_bytes, page_num=toc_page_num))
+                german_toc = structure_toc(get_toc_text_from_pdf_bytes(ger_pdf_bytes, page_num=toc_page_num))
+                # --- END FIX ---
 
-    # Sort all extracted content by its character offset to maintain document order
-    all_content.sort(key=lambda x: x['offset'])
+            with st.spinner("Step 4/8: Aligning ToC sections..."):
+                aligned_sections = align_tocs(english_toc, german_toc)
+                st.toast(f"Matched {len(aligned_sections)} ToC sections.")
+                with st.expander("✅ Matched Sections", expanded=True):
+                    for sec in aligned_sections:
+                        st.write(f"'{sec['english']['title']}' → '{sec['german']['title']}'")
 
-    # --- Step 3: Stitch broken paragraphs ---
-    final_content: List[ContentItem] = []
-    stitched_text = ""
-    current_page = 0
-    current_type = "paragraph"
+            with st.spinner("Step 5/8: Aligning content for each section..."):
+                progress_bar = st.progress(0, "Aligning sections...")
+                for i, section in enumerate(aligned_sections):
+                    eng_sec, ger_sec = section['english'], section['german']
 
-    for i, segment in enumerate(all_content):
-        # If the current element is a table or a structural heading, finalize the previous stitched text.
-        is_standalone = segment['type'] in config.STRUCTURAL_ROLES or segment['type'] == 'table'
+                    eng_section_content = [item for item in full_english_content if eng_sec['start_page'] <= item['page'] <= eng_sec['end_page']]
+                    ger_section_content = [item for item in full_german_content if ger_sec['start_page'] <= item['page'] <= ger_sec['end_page']]
 
-        if is_standalone:
-            if stitched_text: # Finalize any pending paragraph
-                final_content.append({'text': stitched_text, 'type': current_type, 'page': current_page})
-                stitched_text = ""
-            final_content.append(segment) # Add the standalone item
-            continue
+                    if eng_section_content and ger_section_content:
+                        aligned_pairs_section = align_content(eng_section_content, ger_section_content, context_window=1)
+                        final_aligned_pairs.extend(aligned_pairs_section)
+                        # Store results for debug report
+                        section_debug_data[eng_sec['title']] = aligned_pairs_section
 
-        # This logic handles stitching of regular paragraphs
-        if not stitched_text: # Start a new paragraph
-            stitched_text = segment['text']
-            current_page = segment['page']
-            current_type = segment['type']
-        else:
-            # If previous text ends with punctuation, start a new paragraph
-            if stitched_text.endswith(('.', '!', '?', ':', '•')):
-                final_content.append({'text': stitched_text, 'type': current_type, 'page': current_page})
-                stitched_text = segment['text']
-                current_page = segment['page']
-                current_type = segment['type']
-            else: # Continue stitching the current paragraph
-                stitched_text += f" {segment['text']}"
+                    progress_bar.progress((i + 1) / len(aligned_sections), f"Aligned '{eng_sec['title']}'")
+            
+            with st.spinner("Step 6/8: Saving alignment and debug reports..."):
+                final_aligned_pairs.sort(key=lambda x: (x['english']['page'] if x.get('english') else float('inf')))
+                
+                alignment_report_path = output_dir / f"alignment_{base_filename}.xlsx"
+                save_alignment_report(final_aligned_pairs, alignment_report_path)
+                st.toast("Saved Main Alignment Report.")
 
-    # Add the last stitched paragraph if it exists
-    if stitched_text:
-        final_content.append({'text': stitched_text, 'type': current_type, 'page': current_page})
+                debug_report_path = output_dir / f"debug_report_{base_filename}.xlsx"
+                save_sectionwise_debug_report(section_debug_data, debug_report_path)
+                st.toast("Saved Section-wise Debug Report.")
 
-    return final_content
+
+            with st.spinner("Step 7/8: Evaluating aligned pairs for errors..."):
+                st.session_state.evaluation_results = list(run_evaluation_pipeline(final_aligned_pairs))
+
+            with st.spinner("Step 8/8: Saving evaluation report..."):
+                if st.session_state.evaluation_results:
+                    eval_report_path = output_dir / f"evaluation_{base_filename}.xlsx"
+                    save_evaluation_report(st.session_state.evaluation_results, eval_report_path)
+                    st.toast("Saved Evaluation Report.")
+
+            st.session_state.analysis_complete = True
+            st.success("Analysis pipeline finished successfully!")
+            time.sleep(2)
+            st.rerun()
+
+        except Exception as e:
+            # This block will now also catch the RuntimeError from the embedding failure
+            st.session_state.error_message = f"An error occurred: {e}"
+            st.exception(e) # Also show traceback in the terminal for debugging
+  D         st.rerun()
+        
+        # --- FIX for Flaw 3: Remove finally block ---
+        # (The finally block for os.remove is no longer needed)
+        # --- END FIX ---
+
+
+    # --- Download Button ---
+    st.header("3. Export Results")
+    if st.session_state.analysis_complete and st.session_state.evaluation_results:
+        excel_data = create_excel_report_in_memory(st.session_state.evaluation_results)
+        st.download_button(
+            label="📥 Download Evaluation Report",
+            data=excel_data,
+            file_name=f"Translation_Evaluation_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    else:
+        st.markdown("_Report available after analysis._")
+
+# --- Main Display Area ---
+st.header("Evaluation Results")
+
+if st.session_state.error_message:
+    st.error(st.session_state.error_message, icon="🚨")
+elif st.session_state.analysis_complete:
+    if not st.session_state.evaluation_results:
+        st.success("✅ Analysis complete. No significant errors were found.")
+    else:
+        display_results(st.session_state.evaluation_results)
+else:
+    st.info("Upload your PDFs and click 'Run Analysis' to begin.")
