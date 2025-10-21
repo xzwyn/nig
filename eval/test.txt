@@ -1,198 +1,69 @@
-// test_1/app.py
-# test_1/app.py
-from dotenv import load_dotenv
-load_dotenv()
-
-import streamlit as st
-from datetime import datetime
-import time
+# test_1/src/processing/toc_parser.py
+import re
 from pathlib import Path
-import os # <-- No longer needed for file cleanup
+from typing import List, Dict, Any
+import fitz  # PyMuPDF
 
-# --- Import project modules ---
-import config
-from src.clients.doc_intelligence_client import analyze_pdf
-from src.processing.json_parser import process_document_json
-# --- FIX for Flaw 3: Import new function and remove old one ---
-from src.processing.toc_parser import get_toc_text_from_pdf_bytes, structure_toc
-# --- END FIX ---
-from src.alignment.toc_aligner import align_tocs
-from src.alignment.semantic_aligner import align_content
-from src.evaluation.pipeline import run_evaluation_pipeline
-from src.reporting.excel_writer import (
-    create_excel_report_in_memory,
-    save_alignment_report,
-    save_evaluation_report,
-    save_sectionwise_debug_report # Import the new function
-)
-from src.reporting.markdown_writer import save_to_markdown
+# A type alias for a structured ToC item
+ToCItem = Dict[str, Any]
 
-# --- FIX for Flaw 3: Remove save_temp_file helper function ---
-# (The save_temp_file function is no longer needed)
-# --- END FIX ---
+def get_toc_text_from_pdf(pdf_path: Path, page_num: int = 1) -> str:
+    """Extracts raw text from a specific page of a PDF file."""
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDF file not found at: {pdf_path}")
 
-# --- Page Configuration & UI Functions (unchanged) ---
-st.set_page_config(page_title="Translation Evaluator", layout="wide")
+    try:
+        with fitz.open(pdf_path) as doc:
+            if page_num < len(doc):
+                page = doc.load_page(page_num)
+                return page.get_text("text")
+            else:
+                # Fallback to first page if specified page doesn't exist
+                print(f"Warning: Page {page_num} not found. Falling back to page 0.")
+                page = doc.load_page(0)
+                return page.get_text("text")
+    except Exception as e:
+        raise IOError(f"Error opening or reading PDF file '{pdf_path}': {e}") from e
 
-def display_results(results_list: list):
-    """Renders the list of evaluation findings in the Streamlit UI."""
-    if not results_list: return
-    st.subheader(f"Found {len(results_list)} noteworthy items")
-    results_list.sort(key=lambda x: x.get('page', 0))
-    for result in results_list:
-        error_type = result.get('type', 'Info')
-        with st.container(border=True):
-            st.markdown(f"**Page:** `{result.get('page', 'N/A')}` | **Type:** `{error_type}`")
-            original_phrase, translated_phrase = result.get("original_phrase"), result.get("translated_phrase")
-            if original_phrase or translated_phrase:
-                st.markdown("##### 🔍 Error Focus")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("**Original English Phrase:**"); st.error(f"'{original_phrase or 'N/A'}'")
-                with col2:
-                    st.markdown("**Translated German Phrase:**"); st.warning(f"'{translated_phrase or 'N/A'}'")
-                st.divider()
-            st.markdown("##### Full Text Context")
-            col1, col2 = st.columns(2)
-            with col1: st.markdown(f"> {result['english_text']}")
-            with col2: st.markdown(f"> {result['german_text']}")
-            st.markdown(f"**💡 Suggestion:** {result['suggestion']}")
+def structure_toc(toc_text: str) -> List[ToCItem]:
+    """
+    Parses the raw text of a Table of Contents into a structured list of sections,
+    including their titles and start pages.
+    """
+    # Regex to find lines starting with a number (page number) followed by text
+    section_pattern = re.compile(r"^\s*(\d+)\s+(.*)")  # ← CHANGED
 
-# --- Main App ---
-st.title("📚 Translation Evaluator (ToC-Based)")
-st.markdown("This tool aligns documents section-by-section based on the Table of Contents for improved accuracy.")
-st.divider()
+    structured_list: List[ToCItem] = []
+    lines = toc_text.split('\n')
 
-if 'analysis_complete' not in st.session_state: st.session_state.analysis_complete = False
-if 'evaluation_results' not in st.session_state: st.session_state.evaluation_results = []
-if 'error_message' not in st.session_state: st.session_state.error_message = None
+    for line in lines:
+        line = line.strip()
+        if not line or len(line) < 3:
+            continue
 
-# --- Sidebar for Inputs and Controls ---
-with st.sidebar:
-    st.header("1. Upload Documents")
-    english_pdf = st.file_uploader("Upload English PDF (Source)", type="pdf", key="eng_pdf")
-    german_pdf = st.file_uploader("Upload German PDF (Translation)", type="pdf", key="ger_pdf")
+        match = section_pattern.match(line)
+        if match:
+            page_number_str, title = match.groups()  # ← CHANGED ORDER
 
-    st.header("2. Configure & Run")
-    toc_page_num = st.number_input("ToC Page Number in PDF", min_value=1, max_value=20, value=2) - 1
+            # Further clean the title from leading numbers/bullets
+            title = re.sub(r"^\s*([A-D]|\d{1,2}[\.\s])\s*[_]?\s*", "", title).strip()
 
-    if st.button("🚀 Run Analysis", disabled=not (english_pdf and german_pdf), type="primary"):
-        st.session_state.analysis_complete = False
-        st.session_state.evaluation_results = []
-        st.session_state.error_message = None
+            if title and len(title) > 4:
+                structured_list.append({
+                    'title': title,
+                    'start_page': int(page_number_str)
+                })
 
-        output_dir = Path(config.OUTPUT_DIR)
-        output_dir.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_filename = f"{Path(english_pdf.name).stem}_{timestamp}"
-        
-        # --- FIX for Flaw 3: Remove temp file variables ---
-        # (No longer need eng_temp_path, ger_temp_path)
-        # --- END FIX ---
-        try:
-            final_aligned_pairs = []
-            section_debug_data = {} # To store data for the debug report
+    if not structured_list:
+        return []
 
-            with st.spinner("Step 1/8: Analyzing PDFs with Azure Document Intelligence..."):
-                # --- FIX for Flaw 3: Get bytes here ---
-                eng_pdf_bytes = english_pdf.getvalue()
-                ger_pdf_bytes = german_pdf.getvalue()
-                eng_json_data = analyze_pdf(eng_pdf_bytes, english_pdf.name)
-                ger_json_data = analyze_pdf(ger_pdf_bytes, german_pdf.name)
-                # --- END FIX ---
+    # Sort by start page to ensure correct order
+    structured_list.sort(key=lambda x: x['start_page'])
 
-            with st.spinner("Step 2/8: Processing full document content..."):
-                full_english_content = process_document_json(eng_json_data)
-                full_german_content = process_document_json(ger_json_data)
+    # Calculate the end_page for each section
+    for i in range(len(structured_list) - 1):
+        structured_list[i]['end_page'] = structured_list[i+1]['start_page'] - 1
 
-            with st.spinner("Step 3/8: Extracting and structuring Tables of Contents..."):
-                # --- FIX for Flaw 3: Use bytes directly ---
-                english_toc = structure_toc(get_toc_text_from_pdf_bytes(eng_pdf_bytes, page_num=toc_page_num))
-                german_toc = structure_toc(get_toc_text_from_pdf_bytes(ger_pdf_bytes, page_num=toc_page_num))
-                # --- END FIX ---
+    structured_list[-1]['end_page'] = 999
 
-            with st.spinner("Step 4/8: Aligning ToC sections..."):
-                aligned_sections = align_tocs(english_toc, german_toc)
-                st.toast(f"Matched {len(aligned_sections)} ToC sections.")
-                with st.expander("✅ Matched Sections", expanded=True):
-                    for sec in aligned_sections:
-                        st.write(f"'{sec['english']['title']}' → '{sec['german']['title']}'")
-
-            with st.spinner("Step 5/8: Aligning content for each section..."):
-                progress_bar = st.progress(0, "Aligning sections...")
-                for i, section in enumerate(aligned_sections):
-                    eng_sec, ger_sec = section['english'], section['german']
-
-                    eng_section_content = [item for item in full_english_content if eng_sec['start_page'] <= item['page'] <= eng_sec['end_page']]
-                    ger_section_content = [item for item in full_german_content if ger_sec['start_page'] <= item['page'] <= ger_sec['end_page']]
-
-                    if eng_section_content and ger_section_content:
-                        aligned_pairs_section = align_content(eng_section_content, ger_section_content, context_window=1)
-                        final_aligned_pairs.extend(aligned_pairs_section)
-                        # Store results for debug report
-                        section_debug_data[eng_sec['title']] = aligned_pairs_section
-
-                    progress_bar.progress((i + 1) / len(aligned_sections), f"Aligned '{eng_sec['title']}'")
-            
-            with st.spinner("Step 6/8: Saving alignment and debug reports..."):
-                final_aligned_pairs.sort(key=lambda x: (x['english']['page'] if x.get('english') else float('inf')))
-                
-                alignment_report_path = output_dir / f"alignment_{base_filename}.xlsx"
-                save_alignment_report(final_aligned_pairs, alignment_report_path)
-                st.toast("Saved Main Alignment Report.")
-
-                debug_report_path = output_dir / f"debug_report_{base_filename}.xlsx"
-                save_sectionwise_debug_report(section_debug_data, debug_report_path)
-                st.toast("Saved Section-wise Debug Report.")
-
-
-            with st.spinner("Step 7/8: Evaluating aligned pairs for errors..."):
-                st.session_state.evaluation_results = list(run_evaluation_pipeline(final_aligned_pairs))
-
-            with st.spinner("Step 8/8: Saving evaluation report..."):
-                if st.session_state.evaluation_results:
-                    eval_report_path = output_dir / f"evaluation_{base_filename}.xlsx"
-                    save_evaluation_report(st.session_state.evaluation_results, eval_report_path)
-                    st.toast("Saved Evaluation Report.")
-
-            st.session_state.analysis_complete = True
-            st.success("Analysis pipeline finished successfully!")
-            time.sleep(2)
-            st.rerun()
-
-        except Exception as e:
-            # This block will now also catch the RuntimeError from the embedding failure
-            st.session_state.error_message = f"An error occurred: {e}"
-            st.exception(e) # Also show traceback in the terminal for debugging
-  D         st.rerun()
-        
-        # --- FIX for Flaw 3: Remove finally block ---
-        # (The finally block for os.remove is no longer needed)
-        # --- END FIX ---
-
-
-    # --- Download Button ---
-    st.header("3. Export Results")
-    if st.session_state.analysis_complete and st.session_state.evaluation_results:
-        excel_data = create_excel_report_in_memory(st.session_state.evaluation_results)
-        st.download_button(
-            label="📥 Download Evaluation Report",
-            data=excel_data,
-            file_name=f"Translation_Evaluation_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-    else:
-        st.markdown("_Report available after analysis._")
-
-# --- Main Display Area ---
-st.header("Evaluation Results")
-
-if st.session_state.error_message:
-    st.error(st.session_state.error_message, icon="🚨")
-elif st.session_state.analysis_complete:
-    if not st.session_state.evaluation_results:
-        st.success("✅ Analysis complete. No significant errors were found.")
-    else:
-        display_results(st.session_state.evaluation_results)
-else:
-    st.info("Upload your PDFs and click 'Run Analysis' to begin.")
+    return structured_list
