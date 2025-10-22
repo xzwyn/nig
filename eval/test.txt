@@ -79,13 +79,24 @@ Private Sub DefragmentParas(ByRef arr() As String)
     For i = 1 To outCol.Count: arr(i) = outCol(i): Next
 End Sub
 
-Private Function BrowseForFolder(prompt As String) As String
-    Dim fldr As FileDialog
-    Set fldr = Application.FileDialog(msoFileDialogFolderPicker)
-    With fldr
+Private Function BrowseForFile(prompt As String, Optional initialFolder As String = "") As String
+    Dim fDialog As FileDialog
+    Set fDialog = Application.FileDialog(msoFileDialogFilePicker)
+    
+    With fDialog
         .Title = prompt
-        If .Show <> -1 Then Exit Function
-        BrowseForFolder = .SelectedItems(1)
+        .Filters.Clear
+        .Filters.Add "PDF Files", "*.pdf"
+        .AllowMultiSelect = False
+        If initialFolder <> "" Then
+            .initialFolder = initialFolder
+        End If
+        
+        If .Show = -1 Then
+            BrowseForFile = .SelectedItems(1)
+        Else
+            BrowseForFile = ""
+        End If
     End With
 End Function
 
@@ -99,27 +110,30 @@ Private Function ConvertPdfToDocx(pdfPath As String) As String
 End Function
 
 ' ========= MAIN =========
-Public Sub AlignTranslatedParagraphs_AutoPick()
-    Dim folderPath As String
-    folderPath = BrowseForFolder("Select the folder containing the two PDF files:")
-    If folderPath = "" Then Exit Sub
-    If Right(folderPath, 1) <> "\" Then folderPath = folderPath & "\"
+Public Sub AlignTranslatedParagraphs_ManualPick()
+    Dim enPDF As String, dePDF As String
+    Dim lastPath As String
 
-    ' Find PDFs
-    Dim f As String, pdfs As New Collection
-    f = Dir(folderPath & "*.pdf")
-    Do While Len(f) > 0
-        pdfs.Add folderPath & f
-        f = Dir
-    Loop
-    If pdfs.Count < 2 Then
-        MsgBox "Folder must contain at least two PDF files.", vbExclamation
+    ' Browse for English PDF
+    enPDF = BrowseForFile("Select the English (Source) PDF file")
+    If enPDF = "" Then
+        MsgBox "Operation cancelled. No English file selected.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Store the path to use as a starting point for the next dialog
+    On Error Resume Next
+    lastPath = Left(enPDF, InStrRev(enPDF, "\"))
+    On Error GoTo 0
+
+    ' Browse for German PDF
+    dePDF = BrowseForFile("Select the German (Translated) PDF file", lastPath)
+    If dePDF = "" Then
+        MsgBox "Operation cancelled. No German file selected.", vbExclamation
         Exit Sub
     End If
 
-    Dim enPDF As String, dePDF As String
-    enPDF = pdfs(1): dePDF = pdfs(2)
-    MsgBox "Detected files:" & vbCrLf & "English: " & enPDF & vbCrLf & "German: " & dePDF, vbInformation
+    MsgBox "Files selected:" & vbCrLf & "English: " & enPDF & vbCrLf & "German: " & dePDF, vbInformation
 
     ' Convert PDFs
     Dim enDocx As String, deDocx As String
