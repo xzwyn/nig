@@ -79,17 +79,20 @@ Private Sub DefragmentParas(ByRef arr() As String)
     For i = 1 To outCol.Count: arr(i) = outCol(i): Next
 End Sub
 
-Private Function BrowseForFile(prompt As String, Optional initialFolder As String = "") As String
+Private Function BrowseForFile(prompt As String, Optional initialPath As String = "") As String
     Dim fDialog As FileDialog
     Set fDialog = Application.FileDialog(msoFileDialogFilePicker)
     
     With fDialog
         .Title = prompt
         .Filters.Clear
-        .Filters.Add "PDF Files", "*.pdf"
+        .Filters.Add "PDF Files", "*.pdf; *.PDF" ' Allow both .pdf and .PDF
         .AllowMultiSelect = False
-        If initialFolder <> "" Then
-            .initialFolder = initialFolder
+        
+        If initialPath <> "" Then
+            On Error Resume Next
+            .InitialFileName = initialPath ' Use .InitialFileName
+            On Error GoTo 0
         End If
         
         If .Show = -1 Then
@@ -102,12 +105,42 @@ End Function
 
 Private Function ConvertPdfToDocx(pdfPath As String) As String
     Dim doc As Document, docxPath As String
-    docxPath = Replace(pdfPath, ".pdf", ".docx")
-    Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False)
+    Dim fso As Object
+    Dim baseName As String
+    
+    ' Use FileSystemObject to robustly change the extension, ignoring case
+    On Error Resume Next
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Err.Number <> 0 Then
+        MsgBox "Error: Could not create FileSystemObject. Please ensure 'Microsoft Scripting Runtime' is enabled.", vbCritical
+        ConvertPdfToDocx = ""
+        Exit Function
+    End If
+    
+    baseName = fso.GetBaseName(pdfPath)
+    docxPath = fso.GetParentFolderName(pdfPath) & "\" & baseName & ".docx"
+    Set fso = Nothing
+    On Error GoTo 0
+    
+    ' Try to open the PDF
+    On Error Resume Next
+    Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False, AddToRecentFiles:=False, Visible:=False)
+    
+    If doc Is Nothing Or Err.Number <> 0 Then
+        MsgBox "Error opening PDF: " & pdfPath & vbCrLf & "It may be password-protected, corrupted, or Word cannot convert it.", vbCritical
+        ConvertPdfToDocx = ""
+        Err.Clear
+        On Error GoTo 0
+        Exit Function
+    End If
+    On Error GoTo 0
+    
+    ' Save as DOCX
     doc.SaveAs2 FileName:=docxPath, FileFormat:=wdFormatXMLDocument
     doc.Close SaveChanges:=False
     ConvertPdfToDocx = docxPath
 End Function
+
 
 ' ========= MAIN =========
 Public Sub AlignTranslatedParagraphs_ManualPick()
@@ -138,7 +171,11 @@ Public Sub AlignTranslatedParagraphs_ManualPick()
     ' Convert PDFs
     Dim enDocx As String, deDocx As String
     enDocx = ConvertPdfToDocx(enPDF)
+    If enDocx = "" Then Exit Sub ' Check if conversion was successful
+    
     deDocx = ConvertPdfToDocx(dePDF)
+    If deDocx = "" Then Exit Sub ' Check if conversion was successful
+    
     MsgBox "Converted to DOCX successfully." & vbCrLf & enDocx & vbCrLf & deDocx, vbInformation
 
     ' Open
@@ -228,6 +265,8 @@ Public Sub AlignTranslatedParagraphs_ManualPick()
 
     MsgBox "Alignment complete. Table ready in new document.", vbInformation
 End Sub
+
+' ===== THESE WERE THE MISSING FUNCTIONS =====
 
 Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
     Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
