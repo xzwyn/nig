@@ -1,19 +1,232 @@
-def get_toc_text_from_pdf_bytes(pdf_bytes: bytes, page_num: int = 1) -> str:
-    """Extracts raw text from a specific page of a PDF file in memory."""
-    if not pdf_bytes:
-        raise ValueError("PDF bytes are empty.")
-    
-    try:
-        # Open PDF from memory stream
-        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-            if page_num < len(doc):
-                page = doc.load_page(page_num)
-                return page.get_text("text")
-            else:
-                # Fallback to first page if specified page doesn't exist
-                print(f"Warning: Page {page_num} not found. Falling back to page 0.")
-                page = doc.load_page(0)
-                return page.get_text("text")
-    except Exception as e:
-        raise IOError(f"Error opening or reading PDF bytes: {e}") from e
-# --- END NEW FUNCTION ---
+Option Explicit
+
+' ===== CONFIG =====
+Const ENABLE_DEFRAG As Boolean = True
+Const DEFRAG_MIN_CHARS As Long = 120
+Const DEFRAG_SENT_ENDS As String = ".?!:;)»”]"
+
+Const PENALTY_1x2 As Double = 12#
+Const PENALTY_2x1 As Double = 12#
+Const PENALTY_2x2 As Double = 20#
+Const PENALTY_SKIP_BASE As Double = 120#
+Const PENALTY_SKIP_PER_CHAR As Double = 0.4
+
+' ========= UTILITIES =========
+Private Function CleanText(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, ChrW(160), " ")
+    t = Replace(t, vbTab, " ")
+    t = Replace(t, vbCr, " ")
+    t = Replace(t, vbLf, " ")
+    t = Replace(t, Chr(11), " ")
+    t = Replace(t, Chr(7), "")
+    Do While InStr(t, "  ") > 0
+        t = Replace(t, "  ", " ")
+    Loop
+    CleanText = Trim$(t)
+End Function
+
+Private Function ParaLen(ByVal s As String) As Long
+    ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
+End Function
+
+Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Long
+    Dim i As Long, n As Long
+    For i = i1 To i2: n = n + ParaLen(arr(i)): Next
+    SumLen = n
+End Function
+
+Private Function JoinRange(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As String
+    Dim i As Long, t As String
+    For i = i1 To i2
+        If Len(arr(i)) > 0 Then t = t & IIf(Len(t) > 0, vbCrLf, "") & arr(i)
+    Next
+    JoinRange = t
+End Function
+
+Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolean
+    If Len(s) = 0 Then Exit Function
+    EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
+End Function
+
+Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
+    Dim p As Paragraph, tmp As New Collection, s As String
+    For Each p In doc.Paragraphs
+        s = CleanText(p.Range.Text)
+        If Len(s) > 0 Then tmp.Add s
+    Next
+    ReDim texts(1 To tmp.Count)
+    Dim i As Long
+    For i = 1 To tmp.Count: texts(i) = tmp(i): Next
+End Sub
+
+Private Sub DefragmentParas(ByRef arr() As String)
+    If Not ENABLE_DEFRAG Then Exit Sub
+    If UBound(arr) < 2 Then Exit Sub
+    Dim outCol As New Collection, i As Long, buf As String
+    For i = LBound(arr) To UBound(arr)
+        If Len(buf) = 0 Then
+            buf = arr(i)
+        Else
+            buf = buf & " " & arr(i)
+        End If
+        Dim enough As Boolean
+        enough = (ParaLen(buf) >= DEFRAG_MIN_CHARS) Or EndsWithAny(buf, DEFRAG_SENT_ENDS)
+        If enough Then outCol.Add Trim$(buf): buf = ""
+    Next
+    If Len(buf) > 0 Then outCol.Add Trim$(buf)
+    ReDim arr(1 To outCol.Count)
+    For i = 1 To outCol.Count: arr(i) = outCol(i): Next
+End Sub
+
+Private Function BrowseForFolder(prompt As String) As String
+    Dim fldr As FileDialog
+    Set fldr = Application.FileDialog(msoFileDialogFolderPicker)
+    With fldr
+        .Title = prompt
+        If .Show <> -1 Then Exit Function
+        BrowseForFolder = .SelectedItems(1)
+    End With
+End Function
+
+Private Function ConvertPdfToDocx(pdfPath As String) As String
+    Dim doc As Document, docxPath As String
+    docxPath = Replace(pdfPath, ".pdf", ".docx")
+    Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False)
+    doc.SaveAs2 FileName:=docxPath, FileFormat:=wdFormatXMLDocument
+    doc.Close SaveChanges:=False
+    ConvertPdfToDocx = docxPath
+End Function
+
+' ========= MAIN =========
+Public Sub AlignTranslatedParagraphs_AutoPick()
+    Dim folderPath As String
+    folderPath = BrowseForFolder("Select the folder containing the two PDF files:")
+    If folderPath = "" Then Exit Sub
+    If Right(folderPath, 1) <> "\" Then folderPath = folderPath & "\"
+
+    ' Find PDFs
+    Dim f As String, pdfs As New Collection
+    f = Dir(folderPath & "*.pdf")
+    Do While Len(f) > 0
+        pdfs.Add folderPath & f
+        f = Dir
+    Loop
+    If pdfs.Count < 2 Then
+        MsgBox "Folder must contain at least two PDF files.", vbExclamation
+        Exit Sub
+    End If
+
+    Dim enPDF As String, dePDF As String
+    enPDF = pdfs(1): dePDF = pdfs(2)
+    MsgBox "Detected files:" & vbCrLf & "English: " & enPDF & vbCrLf & "German: " & dePDF, vbInformation
+
+    ' Convert PDFs
+    Dim enDocx As String, deDocx As String
+    enDocx = ConvertPdfToDocx(enPDF)
+    deDocx = ConvertPdfToDocx(dePDF)
+    MsgBox "Converted to DOCX successfully." & vbCrLf & enDocx & vbCrLf & deDocx, vbInformation
+
+    ' Open
+    Dim enDoc As Document, deDoc As Document
+    Set enDoc = Documents.Open(enDocx, ReadOnly:=True)
+    Set deDoc = Documents.Open(deDocx, ReadOnly:=True)
+
+    ' Paragraphs
+    Dim EN() As String, DE() As String
+    CollectParagraphs enDoc, EN
+    CollectParagraphs deDoc, DE
+    DefragmentParas EN: DefragmentParas DE
+
+    ' Ratio
+    Dim i As Long, sumEN As Long, sumDE As Long
+    For i = LBound(EN) To UBound(EN): sumEN = sumEN + ParaLen(EN(i)): Next
+    For i = LBound(DE) To UBound(DE): sumDE = sumDE + ParaLen(DE(i)): Next
+    Dim r As Double: r = IIf(sumEN > 0, sumDE / sumEN, 1#)
+
+    ' DP arrays
+    Dim N As Long, M As Long: N = UBound(EN): M = UBound(DE)
+    Dim cost() As Double, backA() As Integer, backI() As Long, backJ() As Long
+    ReDim cost(0 To N, 0 To M): ReDim backA(0 To N, 0 To M)
+    ReDim backI(0 To N, 0 To M): ReDim backJ(0 To N, 0 To M)
+    Dim INF As Double: INF = 1E+30
+    Dim j As Long
+    For i = 0 To N: For j = 0 To M: cost(i, j) = INF: Next: Next
+    cost(0, 0) = 0
+
+    Dim c As Double
+    For i = 0 To N
+        For j = 0 To M
+            If cost(i, j) < INF Then
+                If i + 1 <= N And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 1, r, 0#)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 1, cost(i, j) + c, 1, i, j
+                End If
+                If i + 1 <= N And j + 2 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 2, r, PENALTY_1x2)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 2, cost(i, j) + c, 2, i, j
+                End If
+                If i + 2 <= N And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 1, r, PENALTY_2x1)
+                    UpdateCell cost, backA, backI, backJ, i + 2, j + 1, cost(i, j) + c, 3, i, j
+                End If
+                If i + 1 <= N Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(EN(i + 1))
+                    UpdateCell cost, backA, backI, backJ, i + 1, j, cost(i, j) + c, 5, i, j
+                End If
+                If j + 1 <= M Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(DE(j + 1))
+                    UpdateCell cost, backA, backI, backJ, i, j + 1, cost(i, j) + c, 6, i, j
+                End If
+            End If
+        Next
+    Next
+
+    ' Backtrack
+    Dim pairs As New Collection, i1 As Long: i1 = N, j1 As Long: j1 = M
+    Do While Not (i1 = 0 And j1 = 0)
+        Dim a As Integer, pi As Long, pj As Long, rec As Variant
+        a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
+        rec = Array(a, pi + 1, i1, pj + 1, j1)
+        pairs.Add rec
+        i1 = pi: j1 = pj
+    Loop
+
+    ' Output table
+    Dim outDoc As Document: Set outDoc = Documents.Add
+    Dim rows As Long: rows = pairs.Count + 1
+    Dim tbl As Table
+    Set tbl = outDoc.Tables.Add(Range:=outDoc.Range(0, 0), NumRows:=rows, NumColumns:=3)
+    tbl.Style = "Table Grid"
+    tbl.Cell(1, 1).Range.Text = "English"
+    tbl.Cell(1, 2).Range.Text = "German"
+    tbl.Cell(1, 3).Range.Text = "Mapping"
+
+    Dim k As Long, rcd As Variant, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long
+    For k = pairs.Count To 1 Step -1
+        rcd = pairs(k)
+        a = rcd(0): enFrom = rcd(1): enTo = rcd(2): deFrom = rcd(3): deTo = rcd(4)
+        Dim rowIx As Long: rowIx = pairs.Count - k + 2
+        tbl.Cell(rowIx, 1).Range.Text = JoinRange(EN, enFrom, enTo)
+        tbl.Cell(rowIx, 2).Range.Text = JoinRange(DE, deFrom, deTo)
+        tbl.Cell(rowIx, 3).Range.Text = enFrom & "-" & enTo & " ↔ " & deFrom & "-" & deTo
+    Next
+
+    MsgBox "Alignment complete. Table ready in new document.", vbInformation
+End Sub
+
+Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
+    Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
+    Dim lenDE As Long: lenDE = SumLen(DE, dj1, dj2)
+    Dim dev As Double: dev = Abs(lenDE - lenEN * ratio)
+    AlignCost = dev ^ 0.9 + penalty
+End Function
+
+Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef backI() As Long, ByRef backJ() As Long, ni As Long, nj As Long, newCost As Double, action As Integer, pi As Long, pj As Long)
+    If newCost < cost(ni, nj) Then
+        cost(ni, nj) = newCost
+        backA(ni, nj) = action
+        backI(ni, nj) = pi
+        backJ(ni, nj) = pj
+    End If
+End Sub
