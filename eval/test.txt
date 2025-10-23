@@ -63,7 +63,11 @@ Private Function ParaLen(ByVal s As String) As Long
     ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
 End Function
 
-' <<< CHANGED: Return type must be Double to prevent overflow
+'
+'
+' <<< --- FIX #1 IS HERE --- >>>
+' The function MUST return As Double
+'
 Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Double
     Dim i As Long, N As Double
     For i = i1 To i2: N = N + ParaLen(arr(i)): Next
@@ -342,7 +346,11 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
     MsgBox "Alignment complete. Clean paragraphs and mapping table are ready.", vbInformation
 End Sub
 
-' <<< CHANGED: Variables must be Double to hold the result from SumLen
+'
+'
+' <<< --- FIX #2 IS HERE --- >>>
+' The variables MUST be As Double to hold the result from SumLen
+'
 Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
     Dim lenEN As Double: lenEN = SumLen(EN, ei1, ei2)
     Dim lenDE As Double: lenDE = SumLen(DE, dj1, dj2)
