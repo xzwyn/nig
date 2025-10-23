@@ -64,7 +64,7 @@ Private Function ParaLen(ByVal s As String) As Long
 End Function
 
 Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Long
-    Dim i As Long, N As Long
+    Dim i As Long, N As Double
     For i = i1 To i2: N = N + ParaLen(arr(i)): Next
     SumLen = N
 End Function
@@ -88,7 +88,7 @@ Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolea
     EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
 End Function
 
-' ---------- PDF → DOCX hygiene ----------
+' ---------- PDF ? DOCX hygiene ----------
 Private Sub StripHeadersAndFooters(doc As Document)
     Dim sec As Section
     For Each sec In doc.Sections
@@ -118,32 +118,32 @@ End Sub
 
 Private Sub PreprocessDoc(doc As Document)
     ' Work on a temp Range (whole doc)
-    Dim R As Range: Set R = doc.Content
+    Dim r As Range: Set r = doc.Content
 
     ' 1) Remove headers/footers (page numbers, ribbons)
     StripHeadersAndFooters doc
 
     ' 2) De-hyphenate splits across paragraph or manual line breaks
-    '    "-^13" or "-^l" → "" (join word halves)
-    ReplaceAll R, "-^13", ""
-    ReplaceAll R, "-^l", ""
+    '    "-^13" or "-^l" ? "" (join word halves)
+    ReplaceAll r, "-^13", ""
+    ReplaceAll r, "-^l", ""
 
     ' 3) Convert manual line breaks (^l) to space to restore sentences
-    ReplaceAll R, "^l", " "
+    ReplaceAll r, "^l", " "
 
     ' 4) Convert page breaks (^m) and section breaks (^b) to space
-    ReplaceAll R, "^m", " "
-    ReplaceAll R, "^b", " "
+    ReplaceAll r, "^m", " "
+    ReplaceAll r, "^b", " "
 
     ' 5) Remove soft hyphens and odd control chars (defensive)
-    ReplaceAll R, ChrW(173), ""      ' soft hyphen, if any remain
+    ReplaceAll r, ChrW(173), ""      ' soft hyphen, if any remain
 
     ' 6) Collapse multiple spaces
     Do
         Dim cntBefore As Long
-        cntBefore = Len(R.Text)
-        ReplaceAll R, "  ", " "
-        If Len(R.Text) = cntBefore Then Exit Do
+        cntBefore = Len(r.Text)
+        ReplaceAll r, "  ", " "
+        If Len(r.Text) = cntBefore Then Exit Do
     Loop
 End Sub
 
@@ -257,7 +257,7 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
     DefragmentParas EN: DefragmentParas DE
 
     ' Ratio
-    Dim i As Long, sumEN As Long, sumDE As Long
+    Dim i As Long, sumEN As Double, sumDE As Double
     For i = LBound(EN) To UBound(EN): sumEN = sumEN + ParaLen(EN(i)): Next
     For i = LBound(DE) To UBound(DE): sumDE = sumDE + ParaLen(DE(i)): Next
     Dim r As Double: r = IIf(sumEN > 0, CDbl(sumDE) / CDbl(sumEN), 1#)
@@ -356,3 +356,4 @@ Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef b
         backJ(ni, nj) = pj
     End If
 End Sub
+
