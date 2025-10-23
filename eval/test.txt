@@ -280,9 +280,11 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
     ' Backtrack
     Dim pairs As New Collection, i1 As Long: i1 = N
     Dim j1 As Long: j1 = M
+    ' --- FIX 1: 'a' is declared here, ONCE. ---
+    Dim a As AlignAction
     Do While Not (i1 = 0 And j1 = 0)
         ' --- CHANGED: Use Enum for action ---
-        Dim a As AlignAction
+        ' --- FIX 2: The 'Dim a...' line was REMOVED from here ---
         Dim pi As Long, pj As Long, rec As Variant
         a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
         rec = Array(a, pi + 1, i1, pj + 1, j1)
@@ -304,8 +306,8 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
     tbl.Cell(1, 2).Range.Text = "German"
     tbl.Cell(1, 3).Range.Text = "Mapping"
     
-    ' --- FIX 1: Declared 'a' here ---
-    Dim k As Long, rcd As Variant, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long, a As AlignAction
+    ' --- FIX 3: ', a As AlignAction' was REMOVED from this Dim statement ---
+    Dim k As Long, rcd As Variant, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long
     For k = pairs.Count To 1 Step -1
         rcd = pairs(k)
         a = rcd(0): enFrom = rcd(1): enTo = rcd(2): deFrom = rcd(3): deTo = rcd(4)
@@ -341,7 +343,6 @@ Cleanup:
     Set deDoc = Nothing
     Set outDoc = Nothing
     Set tbl = Nothing
-    ' --- FIX 2: Removed 'Set fd = Nothing' ---
     Exit Sub ' This is the final exit point
 
 ErrorHandler:
