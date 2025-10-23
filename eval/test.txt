@@ -1,7 +1,7 @@
 ' ===== CONFIG =====
 Const ENABLE_DEFRAG As Boolean = True
 Const DEFRAG_MIN_CHARS As Long = 140
-Const DEFRAG_SENT_ENDS As String = ".?!:;)]”»»" ' added ) ] ” and chevrons
+Private DEFRAG_SENT_ENDS As String ' <<< CHANGED: Was Const, see InitDefragChars
 
 Const PENALTY_1x2 As Double = 12#
 Const PENALTY_2x1 As Double = 12#
@@ -23,6 +23,14 @@ Private Sub InitBlacklist()
         "_ To our Investors _", _
         "_ An unsere Aktionärinnen und Aktionäre _" _
     )
+End Sub
+
+' <<< ADDED: New sub to handle special characters safely
+Private Sub InitDefragChars()
+    ' Build the string using character codes to avoid syntax errors
+    ' ChrW(8221) = ” (smart quote)
+    ' ChrW(187)  = » (chevron)
+    DEFRAG_SENT_ENDS = ".?!:;)]" & ChrW(8221) & ChrW(187) & ChrW(187)
 End Sub
 
 ' ========= UTILITIES =========
@@ -128,7 +136,7 @@ Private Sub PreprocessDoc(doc As Document)
     ReplaceAll R, "^b", " "
 
     ' 5) Remove soft hyphens and odd control chars (defensive)
-    ReplaceAll R, ChrW(173), ""       ' soft hyphen, if any remain
+    ReplaceAll R, ChrW(173), ""      ' soft hyphen, if any remain
 
     ' 6) Collapse multiple spaces
     Do
@@ -141,6 +149,7 @@ End Sub
 
 Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
     InitBlacklist
+    InitDefragChars  ' <<< ADDED: Initialize the special characters string
 
     ' Ensure doc is cleaned BEFORE collecting
     PreprocessDoc doc
@@ -152,10 +161,12 @@ Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
         If Len(s) >= 3 Then
             If Not IsBlacklisted(s) Then
                 ' Also skip pure page labels like just a page number
-                If Not s Like "#"
-                If Not s Like "##"
-                If Not s Like "*"
-                Then tmp.Add s
+                If Not s Like "#" Then
+                If Not s Like "##" Then
+                If Not s Like "*" Then
+                    tmp.Add s
+                End If
+                End If
                 End If
             End If
         End If
