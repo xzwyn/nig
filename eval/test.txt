@@ -1,9 +1,7 @@
-Option Explicit
-
 ' ===== CONFIG =====
 Const ENABLE_DEFRAG As Boolean = True
-Const DEFRAG_MIN_CHARS As Long = 120
-Const DEFRAG_SENT_ENDS As String = ".?!:;)""]"
+Const DEFRAG_MIN_CHARS As Long = 140
+Const DEFRAG_SENT_ENDS As String = ".?!:;)]”»»" ' added ) ] ” and chevrons
 
 Const PENALTY_1x2 As Double = 12#
 Const PENALTY_2x1 As Double = 12#
@@ -11,30 +9,46 @@ Const PENALTY_2x2 As Double = 20#
 Const PENALTY_SKIP_BASE As Double = 120#
 Const PENALTY_SKIP_PER_CHAR As Double = 0.4
 
-' Enum for "Best Practices" to make action codes readable
-Private Enum AlignAction
-    act_Invalid = 0
-    act_1x1 = 1
-    act_1x2 = 2
-    act_2x1 = 3
-    act_2x2 = 4 ' The missing 2x2 action
-    act_SkipEN = 5
-    act_SkipDE = 6
-End Enum
+' Common boilerplate to drop after cleaning
+Private BLACKLIST As Variant
+Private Sub InitBlacklist()
+    BLACKLIST = Array( _
+        "Internal", _
+        "Annual Report 2024", _
+        "Allianz Group", _
+        "Geschäftsbericht 2024", _
+        "Allianz Konzern", _
+        "SUPERVISORY BOARD REPORT", _
+        "BERICHT DES AUFSICHTSRATS", _
+        "_ To our Investors _", _
+        "_ An unsere Aktionärinnen und Aktionäre _" _
+    )
+End Sub
 
 ' ========= UTILITIES =========
 Private Function CleanText(ByVal s As String) As String
     Dim t As String
-    t = Replace(s, ChrW(160), " ")
+    t = s
+    ' normalize spaces and line artifacts
+    t = Replace(t, ChrW(160), " ")   ' NBSP -> space
     t = Replace(t, vbTab, " ")
-    t = Replace(t, vbCr, " ")
-    t = Replace(t, vbLf, " ")
-    t = Replace(t, Chr(11), " ")
-    t = Replace(t, Chr(7), "")
-    Do While InStr(t, "  ") > 0
-        t = Replace(t, "  ", " ")
-    Loop
+    t = Replace(t, Chr(11), " ")     ' manual line (rare in Ranges)
+    t = Replace(t, ChrW(173), "")    ' soft hyphen
+    t = Replace(t, Chr(7), "")       ' bell (rare)
+    ' collapse whitespace
+    Do While InStr(t, "  ") > 0: t = Replace(t, "  ", " "): Loop
     CleanText = Trim$(t)
+End Function
+
+Private Function IsBlacklisted(ByVal s As String) As Boolean
+    Dim i As Long, key As String
+    key = LCase$(s)
+    For i = LBound(BLACKLIST) To UBound(BLACKLIST)
+        If InStr(1, key, LCase$(BLACKLIST(i)), vbTextCompare) > 0 Then
+            IsBlacklisted = True
+            Exit Function
+        End If
+    Next
 End Function
 
 Private Function ParaLen(ByVal s As String) As Long
@@ -66,21 +80,94 @@ Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolea
     EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
 End Function
 
+' ---------- PDF → DOCX hygiene ----------
+Private Sub StripHeadersAndFooters(doc As Document)
+    Dim sec As Section
+    For Each sec In doc.Sections
+        On Error Resume Next
+        sec.Headers(wdHeaderFooterPrimary).Range.Delete
+        sec.Headers(wdHeaderFooterFirstPage).Range.Delete
+        sec.Headers(wdHeaderFooterEvenPages).Range.Delete
+        sec.Footers(wdHeaderFooterPrimary).Range.Delete
+        sec.Footers(wdHeaderFooterFirstPage).Range.Delete
+        sec.Footers(wdHeaderFooterEvenPages).Range.Delete
+        On Error GoTo 0
+    Next sec
+End Sub
+
+Private Sub ReplaceAll(rng As Range, findTxt As String, replTxt As String, Optional useWildcards As Boolean = False)
+    With rng.Find
+        .ClearFormatting: .Replacement.ClearFormatting
+        .Text = findTxt
+        .Replacement.Text = replTxt
+        .Forward = True
+        .Wrap = wdFindStop
+        .Format = False
+        .MatchWildcards = useWildcards
+        .Execute Replace:=wdReplaceAll
+    End With
+End Sub
+
+Private Sub PreprocessDoc(doc As Document)
+    ' Work on a temp Range (whole doc)
+    Dim R As Range: Set R = doc.Content
+
+    ' 1) Remove headers/footers (page numbers, ribbons)
+    StripHeadersAndFooters doc
+
+    ' 2) De-hyphenate splits across paragraph or manual line breaks
+    '    "-^13" or "-^l" → "" (join word halves)
+    ReplaceAll R, "-^13", ""
+    ReplaceAll R, "-^l", ""
+
+    ' 3) Convert manual line breaks (^l) to space to restore sentences
+    ReplaceAll R, "^l", " "
+
+    ' 4) Convert page breaks (^m) and section breaks (^b) to space
+    ReplaceAll R, "^m", " "
+    ReplaceAll R, "^b", " "
+
+    ' 5) Remove soft hyphens and odd control chars (defensive)
+    ReplaceAll R, ChrW(173), ""       ' soft hyphen, if any remain
+
+    ' 6) Collapse multiple spaces
+    Do
+        Dim cntBefore As Long
+        cntBefore = Len(R.Text)
+        ReplaceAll R, "  ", " "
+        If Len(R.Text) = cntBefore Then Exit Do
+    Loop
+End Sub
+
 Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
+    InitBlacklist
+
+    ' Ensure doc is cleaned BEFORE collecting
+    PreprocessDoc doc
+
     Dim p As Paragraph, tmp As New Collection, s As String
     For Each p In doc.Paragraphs
         s = CleanText(p.Range.Text)
-        If Len(s) > 0 Then tmp.Add s
+        ' Skip empty, very short noise, or blacklisted boilerplate
+        If Len(s) >= 3 Then
+            If Not IsBlacklisted(s) Then
+                ' Also skip pure page labels like just a page number
+                If Not s Like "#"
+                If Not s Like "##"
+                If Not s Like "*"
+                Then tmp.Add s
+                End If
+            End If
+        End If
     Next
-    
+
     If tmp.Count = 0 Then
-        ReDim texts(1 To 1)
-        texts(1) = "" ' Ensure array is not empty to avoid errors
-    Else
-        ReDim texts(1 To tmp.Count)
-        Dim i As Long
-        For i = 1 To tmp.Count: texts(i) = tmp(i): Next
+        ReDim texts(1 To 1): texts(1) = ""
+        Exit Sub
     End If
+    ReDim texts(1 To tmp.Count)
+    Dim i As Long
+    For i = 1 To tmp.Count: texts(i) = tmp(i): Next
 End Sub
 
 Private Sub DefragmentParas(ByRef arr() As String)
@@ -91,6 +178,7 @@ Private Sub DefragmentParas(ByRef arr() As String)
         If Len(buf) = 0 Then
             buf = arr(i)
         Else
+            ' join with a space since PreprocessDoc removed in-line breaks
             buf = buf & " " & arr(i)
         End If
         Dim enough As Boolean
@@ -98,7 +186,6 @@ Private Sub DefragmentParas(ByRef arr() As String)
         If enough Then outCol.Add Trim$(buf): buf = ""
     Next
     If Len(buf) > 0 Then outCol.Add Trim$(buf)
-    
     ReDim arr(1 To outCol.Count)
     For i = 1 To outCol.Count: arr(i) = outCol(i): Next
 End Sub
@@ -111,99 +198,46 @@ Private Function BrowseForFile(prompt As String) As String
         .Filters.Clear
         .Filters.Add "PDF Files", "*.pdf"
         .AllowMultiSelect = False
-        If .Show <> -1 Then Exit Function ' User cancelled
+        If .Show <> -1 Then Exit Function
         BrowseForFile = .SelectedItems(1)
     End With
 End Function
 
-' --- IMPROVED FUNCTION ---
-' This now handles errors, uses the Temp folder, and avoids file name clashes.
 Private Function ConvertPdfToDocx(pdfPath As String) As String
-    On Error GoTo ErrorHandler
-    Dim doc As Document: Set doc = Nothing
-    Dim docxPath As String
-    Dim fso As Object ' Late binding for Scripting.FileSystemObject
-    Dim tempFolder As String
-    Dim baseName As String
-    
-    ' Use late binding to avoid needing a library reference
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    
-    If Not fso.FileExists(pdfPath) Then GoTo ErrorHandler ' File not found
-    
-    ' Get a safe temp path
-    tempFolder = fso.GetSpecialFolder(2) ' 2 = TemporaryFolder
-    baseName = fso.GetBaseName(pdfPath) & "_" & fso.GetTempName() ' Add temp name to avoid clashes
-    docxPath = fso.BuildPath(tempFolder, baseName & ".docx")
-    
-    ' Open PDF and save as DOCX in the temp folder
-    Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False)
+    Dim doc As Document, docxPath As String
+    docxPath = Replace(LCase$(pdfPath), ".pdf", ".docx")
+    Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False, AddToRecentFiles:=False)
+    ' Save to docx and close
     doc.SaveAs2 FileName:=docxPath, FileFormat:=wdFormatXMLDocument
     doc.Close SaveChanges:=False
-    
-    ConvertPdfToDocx = docxPath ' Success
-    
-    Set doc = Nothing
-    Set fso = Nothing
-    Exit Function
-
-ErrorHandler:
-    ConvertPdfToDocx = "" ' Return empty string on failure
-    If Not doc Is Nothing Then doc.Close SaveChanges:=False
-    Set doc = Nothing
-    Set fso = Nothing
+    ConvertPdfToDocx = docxPath
 End Function
 
 ' ========= MAIN =========
 Public Sub AlignTranslatedParagraphs_AutoPick()
-    ' --- ADDED: Objects for error handling and cleanup ---
-    Dim enDoc As Document: Set enDoc = Nothing
-    Dim deDoc As Document: Set deDoc = Nothing
-    Dim outDoc As Document: Set outDoc = Nothing
-    Dim tbl As Table: Set tbl = Nothing
-    Dim enDocx As String: enDocx = ""
-    Dim deDocx As String: deDocx = ""
-    
-    ' --- ADDED: Error handling and performance ---
-    Application.ScreenUpdating = False
-    On Error GoTo ErrorHandler
-
-    ' Browse for first PDF file
-    Dim enPDF As String
+    Dim enPDF As String, dePDF As String
     enPDF = BrowseForFile("Select the FIRST PDF file (e.g., English):")
-    If enPDF = "" Then
-        MsgBox "No file selected. Operation cancelled.", vbExclamation
-        GoTo Cleanup ' Use cleanup to exit
-    End If
+    If enPDF = "" Then MsgBox "No file selected. Operation cancelled.", vbExclamation: Exit Sub
 
-    ' Browse for second PDF file
-    Dim dePDF As String
     dePDF = BrowseForFile("Select the SECOND PDF file (e.g., German):")
-    If dePDF = "" Then
-        MsgBox "No file selected. Operation cancelled.", vbExclamation
-        GoTo Cleanup ' Use cleanup to exit
-    End If
+    If dePDF = "" Then MsgBox "No file selected. Operation cancelled.", vbExclamation: Exit Sub
 
     MsgBox "Selected files:" & vbCrLf & "First: " & enPDF & vbCrLf & "Second: " & dePDF, vbInformation
 
     ' Convert PDFs
+    Dim enDocx As String, deDocx As String
     enDocx = ConvertPdfToDocx(enPDF)
-    ' --- ADDED: Check for conversion failure ---
-    If enDocx = "" Then
-        MsgBox "Failed to convert the first PDF: " & enPDF & vbCrLf & "The file may be corrupt, secured, or Word may not have permission.", vbCritical
-        GoTo Cleanup
-    End If
-    
     deDocx = ConvertPdfToDocx(dePDF)
-    ' --- ADDED: Check for conversion failure ---
-    If deDocx = "" Then
-        MsgBox "Failed to convert the second PDF: " & dePDF & vbCrLf & "The file may be corrupt, secured, or Word may not have permission.", vbCritical
-        GoTo Cleanup
-    End If
-    
-    ' Open
-    Set enDoc = Documents.Open(enDocx, ReadOnly:=True)
-    Set deDoc = Documents.Open(deDocx, ReadOnly:=True)
+    MsgBox "Converted to DOCX successfully." & vbCrLf & enDocx & vbCrLf & deDocx, vbInformation
+
+    ' Open (ReadOnly prevents accidental edits)
+    Dim enDoc As Document, deDoc As Document
+    Set enDoc = Documents.Open(enDocx, ReadOnly:=False, AddToRecentFiles:=False)
+    Set deDoc = Documents.Open(deDocx, ReadOnly:=False, AddToRecentFiles:=False)
+
+    ' --- CRITICAL: clean imported DOCX before collecting paragraphs ---
+    PreprocessDoc enDoc
+    PreprocessDoc deDoc
 
     ' Paragraphs
     Dim EN() As String, DE() As String
@@ -215,98 +249,67 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
     Dim i As Long, sumEN As Long, sumDE As Long
     For i = LBound(EN) To UBound(EN): sumEN = sumEN + ParaLen(EN(i)): Next
     For i = LBound(DE) To UBound(DE): sumDE = sumDE + ParaLen(DE(i)): Next
-    Dim r As Double
-    If sumEN > 0 Then
-        r = sumDE / sumEN
-    Else
-        r = 1#
-    End If
+    Dim r As Double: r = IIf(sumEN > 0, CDbl(sumDE) / CDbl(sumEN), 1#)
 
     ' DP arrays
     Dim N As Long, M As Long: N = UBound(EN): M = UBound(DE)
-    Dim cost() As Double
-    ' --- CHANGED: Use Enum for backA ---
-    Dim backA() As AlignAction
-    Dim backI() As Long, backJ() As Long
-    ReDim cost(0 To N, 0 To M)
-    ReDim backA(0 To N, 0 To M)
+    Dim cost() As Double, backA() As Integer, backI() As Long, backJ() As Long
+    ReDim cost(0 To N, 0 To M): ReDim backA(0 To N, 0 To M)
     ReDim backI(0 To N, 0 To M): ReDim backJ(0 To N, 0 To M)
-    
     Dim INF As Double: INF = 1E+30
     Dim j As Long
-    For i = 0 To N: For j = 0 To M: cost(i, j) = INF: Next: Next
+    For i = 0 To N: For j = 0 To M: cost(i, j) = INF: Next j: Next i
     cost(0, 0) = 0
 
     Dim c As Double
     For i = 0 To N
         For j = 0 To M
             If cost(i, j) < INF Then
-                ' 1x1 alignment
                 If i + 1 <= N And j + 1 <= M Then
                     c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 1, r, 0#)
-                    UpdateCell cost, backA, backI, backJ, i + 1, j + 1, cost(i, j) + c, act_1x1, i, j
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 1, cost(i, j) + c, 1, i, j
                 End If
-                ' 1x2 alignment
                 If i + 1 <= N And j + 2 <= M Then
                     c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 2, r, PENALTY_1x2)
-                    UpdateCell cost, backA, backI, backJ, i + 1, j + 2, cost(i, j) + c, act_1x2, i, j
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 2, cost(i, j) + c, 2, i, j
                 End If
-                ' 2x1 alignment
                 If i + 2 <= N And j + 1 <= M Then
                     c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 1, r, PENALTY_2x1)
-                    UpdateCell cost, backA, backI, backJ, i + 2, j + 1, cost(i, j) + c, act_2x1, i, j
+                    UpdateCell cost, backA, backI, backJ, i + 2, j + 1, cost(i, j) + c, 3, i, j
                 End If
-                
-                ' --- ADDED: 2x2 alignment ---
-                If i + 2 <= N And j + 2 <= M Then
-                    c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 2, r, PENALTY_2x2)
-                    UpdateCell cost, backA, backI, backJ, i + 2, j + 2, cost(i, j) + c, act_2x2, i, j
-                End If
-                
-                ' Skip EN paragraph
                 If i + 1 <= N Then
                     c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(EN(i + 1))
-                    UpdateCell cost, backA, backI, backJ, i + 1, j, cost(i, j) + c, act_SkipEN, i, j
+                    UpdateCell cost, backA, backI, backJ, i + 1, j, cost(i, j) + c, 5, i, j
                 End If
-                ' Skip DE paragraph
                 If j + 1 <= M Then
                     c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(DE(j + 1))
-                    UpdateCell cost, backA, backI, backJ, i, j + 1, cost(i, j) + c, act_SkipDE, i, j
+                    UpdateCell cost, backA, backI, backJ, i, j + 1, cost(i, j) + c, 6, i, j
                 End If
             End If
-        Next
-    Next
+        Next j
+    Next i
 
     ' Backtrack
-    Dim pairs As New Collection, i1 As Long: i1 = N
-    Dim j1 As Long: j1 = M
-    ' --- FIX 1: 'a' is declared here, ONCE. ---
-    Dim a As AlignAction
+    Dim pairs As New Collection, i1 As Long, j1 As Long
+    i1 = N: j1 = M
     Do While Not (i1 = 0 And j1 = 0)
-        ' --- CHANGED: Use Enum for action ---
-        ' --- FIX 2: The 'Dim a...' line was REMOVED from here ---
-        Dim pi As Long, pj As Long, rec As Variant
+        Dim a As Integer, pi As Long, pj As Long, rec As Variant
         a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
         rec = Array(a, pi + 1, i1, pj + 1, j1)
         pairs.Add rec
         i1 = pi: j1 = pj
     Loop
 
-    ' Close source documents
-    enDoc.Close SaveChanges:=False
-    deDoc.Close SaveChanges:=False
-    Set enDoc = Nothing: Set deDoc = Nothing ' Mark as closed
-
     ' Output table
-    Set outDoc = Documents.Add
+    Dim outDoc As Document: Set outDoc = Documents.Add
     Dim rows As Long: rows = pairs.Count + 1
+    Dim tbl As Table
     Set tbl = outDoc.Tables.Add(Range:=outDoc.Range(0, 0), NumRows:=rows, NumColumns:=3)
     tbl.Style = "Table Grid"
     tbl.Cell(1, 1).Range.Text = "English"
     tbl.Cell(1, 2).Range.Text = "German"
     tbl.Cell(1, 3).Range.Text = "Mapping"
-    
-    ' --- FIX 3: ', a As AlignAction' was REMOVED from this Dim statement ---
+
     Dim k As Long, rcd As Variant, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long
     For k = pairs.Count To 1 Step -1
         rcd = pairs(k)
@@ -316,46 +319,16 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
         tbl.Cell(rowIx, 2).Range.Text = JoinRange(DE, deFrom, deTo)
         tbl.Cell(rowIx, 3).Range.Text = enFrom & "-" & enTo & " ? " & deFrom & "-" & deTo
     Next
-    
-    ' Auto-fit table
+
     tbl.AutoFitBehavior wdAutoFitContent
     tbl.AutoFitBehavior wdAutoFitWindow
-    
-    MsgBox "Alignment complete. Table ready in new document.", vbInformation
 
-' --- ADDED: Cleanup and Error Handler labels ---
-Cleanup:
-    ' This block runs on successful completion OR on error
-    Application.ScreenUpdating = True
-    
-    ' Close any documents that might still be open
-    If Not enDoc Is Nothing Then enDoc.Close SaveChanges:=False
-    If Not deDoc Is Nothing Then deDoc.Close SaveChanges:=False
-    
-    ' Clean up temporary .docx files
-    On Error Resume Next ' Ignore errors if files are already deleted or locked
-    If Len(enDocx) > 0 Then Kill enDocx
-    If Len(deDocx) > 0 Then Kill deDocx
-    On Error GoTo 0
-    
-    ' Release all object variables
-    Set enDoc = Nothing
-    Set deDoc = Nothing
-    Set outDoc = Nothing
-    Set tbl = Nothing
-    Exit Sub ' This is the final exit point
+    ' Close source docs (we modified them during preprocess, save in-place docx)
+    enDoc.Close SaveChanges:=True
+    deDoc.Close SaveChanges:=True
 
-ErrorHandler:
-    ' This block only runs if an error occurred
-    MsgBox "An error occurred:" & vbCrLf & vbCrLf & _
-           "Error " & Err.Number & ": " & Err.Description & vbCrLf & _
-           "Procedure: AlignTranslatedParagraphs_AutoPick", _
-           vbCritical, "Alignment Failed"
-    
-    ' Go to the cleanup block to close files and reset the application
-    GoTo Cleanup
+    MsgBox "Alignment complete. Clean paragraphs and mapping table are ready.", vbInformation
 End Sub
-
 
 Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
     Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
@@ -364,8 +337,7 @@ Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As L
     AlignCost = dev ^ 0.9 + penalty
 End Function
 
-' --- CHANGED: Use Enum for action types ---
-Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As AlignAction, ByRef backI() As Long, ByRef backJ() As Long, ni As Long, nj As Long, newCost As Double, action As AlignAction, pi As Long, pj As Long)
+Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef backI() As Long, ByRef backJ() As Long, ni As Long, nj As Long, newCost As Double, action As Integer, pi As Long, pj As Long)
     If newCost < cost(ni, nj) Then
         cost(ni, nj) = newCost
         backA(ni, nj) = action
