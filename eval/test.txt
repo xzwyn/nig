@@ -63,7 +63,8 @@ Private Function ParaLen(ByVal s As String) As Long
     ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
 End Function
 
-Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Long
+' <<< CHANGED: Return type must be Double to prevent overflow
+Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Double
     Dim i As Long, N As Double
     For i = i1 To i2: N = N + ParaLen(arr(i)): Next
     SumLen = N
@@ -88,7 +89,7 @@ Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolea
     EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
 End Function
 
-' ---------- PDF ? DOCX hygiene ----------
+' ---------- PDF → DOCX hygiene ----------
 Private Sub StripHeadersAndFooters(doc As Document)
     Dim sec As Section
     For Each sec In doc.Sections
@@ -118,32 +119,32 @@ End Sub
 
 Private Sub PreprocessDoc(doc As Document)
     ' Work on a temp Range (whole doc)
-    Dim r As Range: Set r = doc.Content
+    Dim R As Range: Set R = doc.Content
 
     ' 1) Remove headers/footers (page numbers, ribbons)
     StripHeadersAndFooters doc
 
     ' 2) De-hyphenate splits across paragraph or manual line breaks
-    '    "-^13" or "-^l" ? "" (join word halves)
-    ReplaceAll r, "-^13", ""
-    ReplaceAll r, "-^l", ""
+    '    "-^13" or "-^l" → "" (join word halves)
+    ReplaceAll R, "-^13", ""
+    ReplaceAll R, "-^l", ""
 
     ' 3) Convert manual line breaks (^l) to space to restore sentences
-    ReplaceAll r, "^l", " "
+    ReplaceAll R, "^l", " "
 
     ' 4) Convert page breaks (^m) and section breaks (^b) to space
-    ReplaceAll r, "^m", " "
-    ReplaceAll r, "^b", " "
+    ReplaceAll R, "^m", " "
+    ReplaceAll R, "^b", " "
 
     ' 5) Remove soft hyphens and odd control chars (defensive)
-    ReplaceAll r, ChrW(173), ""      ' soft hyphen, if any remain
+    ReplaceAll R, ChrW(173), ""      ' soft hyphen, if any remain
 
     ' 6) Collapse multiple spaces
     Do
         Dim cntBefore As Long
-        cntBefore = Len(r.Text)
-        ReplaceAll r, "  ", " "
-        If Len(r.Text) = cntBefore Then Exit Do
+        cntBefore = Len(R.Text)
+        ReplaceAll R, "  ", " "
+        If Len(R.Text) = cntBefore Then Exit Do
     Loop
 End Sub
 
@@ -341,9 +342,10 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
     MsgBox "Alignment complete. Clean paragraphs and mapping table are ready.", vbInformation
 End Sub
 
+' <<< CHANGED: Variables must be Double to hold the result from SumLen
 Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
-    Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
-    Dim lenDE As Long: lenDE = SumLen(DE, dj1, dj2)
+    Dim lenEN As Double: lenEN = SumLen(EN, ei1, ei2)
+    Dim lenDE As Double: lenDE = SumLen(DE, dj1, dj2)
     Dim dev As Double: dev = Abs(lenDE - lenEN * ratio)
     AlignCost = dev ^ 0.9 + penalty
 End Function
@@ -356,4 +358,3 @@ Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef b
         backJ(ni, nj) = pj
     End If
 End Sub
-
