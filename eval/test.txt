@@ -1,1420 +1,257 @@
-9
-9
-9
-9
-9
-9
-10
-10
-10
-10
-10
-10
-10
-10
-10
-10
-10
-10
-10
-10
-11
-11
-11
-11
-11
-11
-11
-11
-11
-11
-12
-12
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-13
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-14
-15
-15
-15
-15
-15
-15
-15
-15
-15
-15
-15
-15
-15
-15
-15
-16
-16
-16
-16
-16
-16
-16
-16
-17
-17
-17
-17
-17
-17
-17
-17
-17
-17
-18
-18
-18
-18
-18
-18
-18
-18
-18
-18
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-19
-20
-20
-20
-20
-20
-20
-20
-20
-20
-20
-20
-20
-20
-20
-20
-20
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-21
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-22
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-23
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-24
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-25
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-26
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-27
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-28
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-29
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-30
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-31
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-32
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-33
-34
-34
-34
-34
-34
-34
-34
-34
-34
-34
-34
-34
-34
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-35
-36
-36
-36
-36
-36
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-37
-38
-38
-38
-38
-38
-38
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-39
-40
-40
-40
-40
-40
-40
-40
-40
-40
-40
-40
-41
-41
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-42
-43
-43
-43
-43
-43
-43
-43
-43
-43
-43
-43
-43
-43
-43
-43
-43
-43
-44
-44
-44
-45
-45
-46
-46
-46
-47
-47
-47
-48
-49
-49
-49
-50
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-51
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-52
-53
-53
-53
-53
-53
-53
-53
-53
-53
-53
-53
-53
-53
-54
-54
-54
-54
-54
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-55
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-56
-57
-57
-57
-57
-57
-57
-57
-57
-57
-57
-57
-57
-57
-57
-57
-57
-57
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-58
-59
-59
-59
-59
-59
-59
-59
-59
-59
-59
-59
-59
-59
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-60
-61
-61
-61
-61
-61
-61
-61
-61
-62
-62
-62
-62
-62
-62
-62
-62
-62
-62
-62
-63
-63
-63
-63
-63
-63
-63
-63
-63
-64
-64
-64
-64
-64
-64
-64
-64
-64
-64
-64
-64
-64
-64
-64
-64
-65
-65
-65
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-66
-67
-67
-67
-67
-67
-67
-67
-67
-67
-67
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-68
-69
-69
-69
-69
-69
-69
-69
-69
-69
-69
-69
-69
-69
-69
-69
-69
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-70
-71
-71
-71
-71
-71
-71
-71
-72
-72
-72
-72
-73
-73
-73
-74
-74
-74
-75
-75
-75
-76
-76
-76
-77
-77
-77
-78
-78
-78
-79
-79
-79
-80
-80
-80
-81
-81
-81
-81
-81
-81
-82
-82
-83
-83
-83
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-85
-86
-86
-86
-86
-86
-86
-86
-86
-86
-86
-86
-86
-86
-86
-86
-86
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-87
-88
-88
-88
-88
-88
-88
-88
-88
-88
-88
-88
-88
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-89
-90
-90
-90
-90
-90
-90
-90
-90
-90
-90
-90
-90
-90
-90
-90
-91
-91
-91
-91
-91
-91
-91
-91
-91
-91
-91
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-92
-93
-93
-93
-93
-93
-93
-93
-93
-93
-93
-93
-94
-94
-94
-94
-94
-94
-94
-94
-94
-94
-94
-94
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-95
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-96
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-97
-98
-98
-98
-98
-98
-98
-98
-98
-98
-98
-98
-99
-99
-99
-99
-99
-99
-99
-100
-100
-100
-100
-100
-100
-100
-100
-101
-101
-101
-101
-101
-102
-102
-102
-102
-102
-102
-102
-102
-102
-102
-102
-102
-102
-103
-103
-103
-103
-104
-104
-104
-104
-104
-105
-105
-105
-105
-105
-105
-105
-105
-106
-106
-106
-106
-106
-106
-106
-106
-106
-106
-106
-107
-107
-107
-107
-107
-107
-107
-107
-107
-107
-107
-107
-107
-107
-107
-108
-108
-108
-108
-108
-108
-109
-109
-109
-109
-109
-109
-109
-109
-109
-109
-109
-109
-109
-109
-110
-110
-110
-110
-110
-110
-110
-110
-110
-111
-111
-111
-111
-111
-111
-111
-111
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-112
-113
-113
-113
-113
-113
-114
-114
-114
-114
-114
-114
-114
-114
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-115
-116
+' ===== CONFIG =====
+Const ENABLE_DEFRAG As Boolean = True
+Const DEFRAG_MIN_CHARS As Long = 120
+Const DEFRAG_SENT_ENDS As String = ".?!:;)""]"
+
+Const PENALTY_1x2 As Double = 12#
+Const PENALTY_2x1 As Double = 12#
+Const PENALTY_2x2 As Double = 20#
+Const PENALTY_SKIP_BASE As Double = 120#
+Const PENALTY_SKIP_PER_CHAR As Double = 0.4
+
+' ========= UTILITIES =========
+Private Function CleanText(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, ChrW(160), " ")
+    t = Replace(t, vbTab, " ")
+    t = Replace(t, vbCr, " ")
+    t = Replace(t, vbLf, " ")
+    t = Replace(t, Chr(11), " ")
+    t = Replace(t, Chr(7), "")
+    Do While InStr(t, "  ") > 0
+        t = Replace(t, "  ", " ")
+    Loop
+    CleanText = Trim$(t)
+End Function
+
+Private Function ParaLen(ByVal s As String) As Long
+    ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
+End Function
+
+Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Long
+    Dim i As Long, N As Long
+    For i = i1 To i2: N = N + ParaLen(arr(i)): Next
+    SumLen = N
+End Function
+
+Private Function JoinRange(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As String
+    Dim i As Long, t As String
+    For i = i1 To i2
+        If Len(arr(i)) > 0 Then
+            If Len(t) > 0 Then
+                t = t & vbCrLf & arr(i)
+            Else
+                t = arr(i)
+            End If
+        End If
+    Next
+    JoinRange = t
+End Function
+
+Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolean
+    If Len(s) = 0 Then Exit Function
+    EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
+End Function
+
+Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
+    Dim p As Paragraph, tmp As New Collection, s As String
+    For Each p In doc.Paragraphs
+        s = CleanText(p.Range.Text)
+        If Len(s) > 0 Then tmp.Add s
+    Next
+    ReDim texts(1 To tmp.Count)
+    Dim i As Long
+    For i = 1 To tmp.Count: texts(i) = tmp(i): Next
+End Sub
+
+Private Sub DefragmentParas(ByRef arr() As String)
+    If Not ENABLE_DEFRAG Then Exit Sub
+    If UBound(arr) < 2 Then Exit Sub
+    Dim outCol As New Collection, i As Long, buf As String
+    For i = LBound(arr) To UBound(arr)
+        If Len(buf) = 0 Then
+            buf = arr(i)
+        Else
+            buf = buf & " " & arr(i)
+        End If
+        Dim enough As Boolean
+        enough = (ParaLen(buf) >= DEFRAG_MIN_CHARS) Or EndsWithAny(buf, DEFRAG_SENT_ENDS)
+        If enough Then outCol.Add Trim$(buf): buf = ""
+    Next
+    If Len(buf) > 0 Then outCol.Add Trim$(buf)
+    ReDim arr(1 To outCol.Count)
+    For i = 1 To outCol.Count: arr(i) = outCol(i): Next
+End Sub
+
+Private Function BrowseForFile(prompt As String) As String
+    Dim fd As FileDialog
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+    With fd
+        .Title = prompt
+        .Filters.Clear
+        .Filters.Add "PDF Files", "*.pdf"
+        .AllowMultiSelect = False
+        If .Show <> -1 Then Exit Function
+        BrowseForFile = .SelectedItems(1)
+    End With
+End Function
+
+Private Function ConvertPdfToDocx(pdfPath As String) As String
+    Dim doc As Document, docxPath As String
+    docxPath = Replace(pdfPath, ".pdf", ".docx")
+    Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False)
+    doc.SaveAs2 FileName:=docxPath, FileFormat:=wdFormatXMLDocument
+    doc.Close SaveChanges:=False
+    ConvertPdfToDocx = docxPath
+End Function
+
+' ========= MAIN =========
+Public Sub AlignTranslatedParagraphs_AutoPick()
+    ' Browse for first PDF file
+    Dim enPDF As String
+    enPDF = BrowseForFile("Select the FIRST PDF file (e.g., English):")
+    If enPDF = "" Then
+        MsgBox "No file selected. Operation cancelled.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Browse for second PDF file
+    Dim dePDF As String
+    dePDF = BrowseForFile("Select the SECOND PDF file (e.g., German):")
+    If dePDF = "" Then
+        MsgBox "No file selected. Operation cancelled.", vbExclamation
+        Exit Sub
+    End If
+
+    MsgBox "Selected files:" & vbCrLf & "First: " & enPDF & vbCrLf & "Second: " & dePDF, vbInformation
+
+    ' Convert PDFs
+    Dim enDocx As String, deDocx As String
+    enDocx = ConvertPdfToDocx(enPDF)
+    deDocx = ConvertPdfToDocx(dePDF)
+    MsgBox "Converted to DOCX successfully." & vbCrLf & enDocx & vbCrLf & deDocx, vbInformation
+
+    ' Open
+    Dim enDoc As Document, deDoc As Document
+    Set enDoc = Documents.Open(enDocx, ReadOnly:=True)
+    Set deDoc = Documents.Open(deDocx, ReadOnly:=True)
+
+    ' Paragraphs
+    Dim EN() As String, DE() As String
+    CollectParagraphs enDoc, EN
+    CollectParagraphs deDoc, DE
+    DefragmentParas EN: DefragmentParas DE
+
+    ' Ratio
+    Dim i As Long, sumEN As Long, sumDE As Long
+    For i = LBound(EN) To UBound(EN): sumEN = sumEN + ParaLen(EN(i)): Next
+    For i = LBound(DE) To UBound(DE): sumDE = sumDE + ParaLen(DE(i)): Next
+    Dim r As Double
+    If sumEN > 0 Then
+        r = sumDE / sumEN
+    Else
+        r = 1#
+    End If
+
+    ' DP arrays
+    Dim N As Long, M As Long: N = UBound(EN): M = UBound(DE)
+    Dim cost() As Double, backA() As Integer, backI() As Long, backJ() As Long
+    ReDim cost(0 To N, 0 To M): ReDim backA(0 To N, 0 To M)
+    ReDim backI(0 To N, 0 To M): ReDim backJ(0 To N, 0 To M)
+    Dim INF As Double: INF = 1E+30
+    Dim j As Long
+    For i = 0 To N: For j = 0 To M: cost(i, j) = INF: Next: Next
+    cost(0, 0) = 0
+
+    Dim c As Double
+    For i = 0 To N
+        For j = 0 To M
+            If cost(i, j) < INF Then
+                ' 1x1 alignment
+                If i + 1 <= N And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 1, r, 0#)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 1, cost(i, j) + c, 1, i, j
+                End If
+                ' 1x2 alignment
+                If i + 1 <= N And j + 2 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 2, r, PENALTY_1x2)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 2, cost(i, j) + c, 2, i, j
+                End If
+                ' 2x1 alignment
+                If i + 2 <= N And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 1, r, PENALTY_2x1)
+                    UpdateCell cost, backA, backI, backJ, i + 2, j + 1, cost(i, j) + c, 3, i, j
+                End If
+                ' Skip EN paragraph
+                If i + 1 <= N Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(EN(i + 1))
+                    UpdateCell cost, backA, backI, backJ, i + 1, j, cost(i, j) + c, 5, i, j
+                End If
+                ' Skip DE paragraph
+                If j + 1 <= M Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(DE(j + 1))
+                    UpdateCell cost, backA, backI, backJ, i, j + 1, cost(i, j) + c, 6, i, j
+                End If
+            End If
+        Next
+    Next
+
+    ' Backtrack
+    Dim pairs As New Collection, i1 As Long: i1 = N
+    Dim j1 As Long: j1 = M
+    Do While Not (i1 = 0 And j1 = 0)
+        Dim a As Integer, pi As Long, pj As Long, rec As Variant
+        a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
+        rec = Array(a, pi + 1, i1, pj + 1, j1)
+        pairs.Add rec
+        i1 = pi: j1 = pj
+    Loop
+
+    ' Close source documents
+    enDoc.Close SaveChanges:=False
+    deDoc.Close SaveChanges:=False
+
+    ' Output table
+    Dim outDoc As Document: Set outDoc = Documents.Add
+    Dim rows As Long: rows = pairs.Count + 1
+    Dim tbl As Table
+    Set tbl = outDoc.Tables.Add(Range:=outDoc.Range(0, 0), NumRows:=rows, NumColumns:=3)
+    tbl.Style = "Table Grid"
+    tbl.Cell(1, 1).Range.Text = "English"
+    tbl.Cell(1, 2).Range.Text = "German"
+    tbl.Cell(1, 3).Range.Text = "Mapping"
+Dim k As Long, rcd As Variant, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long
+For k = pairs.Count To 1 Step -1
+    rcd = pairs(k)
+    a = rcd(0): enFrom = rcd(1): enTo = rcd(2): deFrom = rcd(3): deTo = rcd(4)
+    Dim rowIx As Long: rowIx = pairs.Count - k + 2
+    tbl.Cell(rowIx, 1).Range.Text = JoinRange(EN, enFrom, enTo)
+    tbl.Cell(rowIx, 2).Range.Text = JoinRange(DE, deFrom, deTo)
+    tbl.Cell(rowIx, 3).Range.Text = enFrom & "-" & enTo & " ? " & deFrom & "-" & deTo
+Next
+
+' Auto-fit table
+tbl.AutoFitBehavior wdAutoFitContent
+tbl.AutoFitBehavior wdAutoFitWindow
+
+MsgBox "Alignment complete. Table ready in new document.", vbInformation
+End Sub
+
+Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
+    Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
+    Dim lenDE As Long: lenDE = SumLen(DE, dj1, dj2)
+    Dim dev As Double: dev = Abs(lenDE - lenEN * ratio)
+    AlignCost = dev ^ 0.9 + penalty
+End Function
+
+Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef backI() As Long, ByRef backJ() As Long, ni As Long, nj As Long, newCost As Double, action As Integer, pi As Long, pj As Long)
+    If newCost < cost(ni, nj) Then
+        cost(ni, nj) = newCost
+        backA(ni, nj) = action
+        backI(ni, nj) = pi
+        backJ(ni, nj) = pj
+    End If
+End Sub
+
+
+
