@@ -1,26 +1,30 @@
 import graphviz
 
 # --- Create a new Directed Graph ---
-dot = graphviz.Digraph(comment='Project Flowchart')
-dot.attr(rankdir='TB', label='Translation Alignment & Evaluation Flowchart', fontsize='20')
+# We use 'dot' for a top-to-bottom layout
+dot = graphviz.Digraph(comment='Granular Project Flowchart')
+dot.attr(rankdir='TB', label='Granular Translation Alignment & Evaluation Flowchart', fontsize='22', labelloc='t')
 
 # --- Define Node Styles (3 Colors, All Rectangles) ---
+# Color 1: Data/IO (e.g., files, data structures)
 style_data = {
     'shape': 'box',
     'style': 'filled',
-    'fillcolor': 'aliceblue',  # Color 1: Data/IO
+    'fillcolor': 'aliceblue',
     'fontname': 'Helvetica',
 }
+# Color 2: Processing (e.g., functions, logic steps)
 style_process = {
     'shape': 'box',
     'style': 'filled',
-    'fillcolor': 'honeydew',   # Color 2: Processing
+    'fillcolor': 'honeydew',
     'fontname': 'Helvetica',
 }
+# Color 3: Decisions & AI Agents
 style_decision = {
-    'shape': 'box',            # Using a box as requested
+    'shape': 'box', # Using a box as requested
     'style': 'filled',
-    'fillcolor': 'seashell', # Color 3: Decisions & AI
+    'fillcolor': 'seashell',
     'fontname': 'Helvetica',
 }
 
@@ -31,22 +35,38 @@ dot.node('B2', 'Upload German PDF', **style_data)
 dot.edge('A', 'B1')
 dot.edge('A', 'B2')
 
-# --- 2. Pre-processing Cluster ---
+# --- 2. Granular Pre-processing Cluster ---
 with dot.subgraph(name='cluster_pre') as c:
-    c.attr(label='Step 1: Pre-processing', style='filled', color='gray95')
+    c.attr(label='Step 1: Pre-processing (json_parser.py)', style='filled', color='gray95', fontsize='14')
     c.node('C1', 'analyze_pdf (Azure Doc Intelligence)', **style_process)
     c.node('C2', 'analyze_pdf (Azure Doc Intelligence)', **style_process)
-    c.node('D1', 'eng_json_data.json', **style_data)
-    c.node('D2', 'ger_json_data.json', **style_data)
-    c.node('E', 'process_document_json (Stitch & Clean)', **style_process)
-    c.node('F', 'full_english_content\nfull_german_content', **style_data)
+    c.node('D1', 'eng_json_data.json\n(Raw Layout Data)', **style_data)
+    c.node('D2', 'ger_json_data.json\n(Raw Layout Data)', **style_data)
     
+    # Granular parsing steps
+    c.node('E1', 'process_document_json (Start)', **style_process)
+    c.node('E2', 'Filter paragraphs by role\n(Remove: IGNORED_ROLES like pageHeader, pageFooter)', **style_process)
+    c.node('E3', 'Filter paragraphs\n(Remove: handwritten)', **style_process)
+    c.node('E4', '_convert_table_to_markdown\n(Converts all table objects)', **style_process)
+    c.node('E5', 'Collect all clean paragraphs & markdown tables', **style_process)
+    # c.node('E6', 'Sort all content by document character offset', **style_process)
+    c.node('E6', 'Stitch adjacent text blocks into paragraphs\n(Stop stitching at punctuation or STRUCTURAL_ROLES like title)', **style_process)
+    
+    c.node('F', 'full_english_content\nfull_german_content\n(Clean, Stitched Content List)', **style_data)
+    
+    # Edges for pre-processing
     c.edge('B1', 'C1')
     c.edge('B2', 'C2')
     c.edge('C1', 'D1')
     c.edge('C2', 'D2')
-    c.edges([('D1', 'E'), ('D2', 'E')])
-    c.edge('E', 'F')
+    c.edges([('D1', 'E1'), ('D2', 'E1')]) # Both JSONs are processed
+    c.edge('E1', 'E2')
+    c.edge('E2', 'E3')
+    c.edge('E3', 'E4')
+    c.edge('E4', 'E5')
+    c.edge('E5', 'E6')
+    c.edge('E6', 'E7')
+    c.edge('E7', 'F')
 
 # --- 3. Decision Point ---
 dot.node('G', 'Select Alignment Mode?', **style_decision)
@@ -54,24 +74,34 @@ dot.edge('F', 'G')
 
 # --- 4A. Path A: ToC-Based Alignment Cluster ---
 with dot.subgraph(name='cluster_toc') as c:
-    c.attr(label='Step 2A: ToC-Based Alignment', style='filled', color='gray95')
+    c.attr(label='Step 2A: ToC-Based Alignment (toc_aligner.py, semantic_aligner.py)', style='filled', color='gray95', fontsize='14')
     c.node('H1', 'get_toc_text_from_pdf_bytes', **style_process)
     c.node('H2', 'structure_toc (Regex)', **style_process)
     c.node('H3', 'align_tocs (Hungarian Algorithm)', **style_process)
     c.node('H4', 'aligned_sections', **style_data)
     c.node('H5', 'Loop:\nFor each aligned section...', **style_process)
     c.node('H6', 'Filter content by section pages', **style_process)
-    c.node('H7', 'align_content (Semantic Aligner)', **style_process)
+    
+    # Granular semantic alignment steps (inside loop)
+    c.node('H7_embed', '_get_embeddings_in_batches\n(with context_window=1)', **style_process)
+    c.node('H7_faiss', 'FAISS (kNN Search)\n(Find k-nearest neighbors for EN->DE and DE->EN)', **style_process)
+    c.node('H7_margin', '_calculate_margin_scores_and_matches\n(Finds mutual best matches, filters by threshold)', **style_process)
+    c.node('H7_pair', 'Enforce 1-to-1 mapping & add unmatched', **style_process)
+    
     c.node('H8', 'section_pairs', **style_data)
     c.node('H9', 'Collate all section_pairs', **style_process)
 
+    # Edges for ToC path
     c.edge('H1', 'H2')
     c.edge('H2', 'H3')
     c.edge('H3', 'H4')
     c.edge('H4', 'H5')
     c.edge('H5', 'H6')
-    c.edge('H6', 'H7')
-    c.edge('H7', 'H8')
+    c.edge('H6', 'H7_embed')
+    c.edge('H7_embed', 'H7_faiss')
+    c.edge('H7_faiss', 'H7_margin')
+    c.edge('H7_margin', 'H7_pair')
+    c.edge('H7_pair', 'H8')
     c.edge('H8', 'H5') # Loop back
     c.edge('H5', 'H9')
 
@@ -80,39 +110,50 @@ dot.edge('G', 'H1', label='ToC-Based')
 
 # --- 4B. Path B: Full Document Alignment Cluster ---
 with dot.subgraph(name='cluster_full') as c:
-    c.attr(label='Step 2B: Full Document Alignment', style='filled', color='gray95')
-    c.node('I1', 'align_content (Semantic Aligner)\n[on *full* content]', **style_process)
+    c.attr(label='Step 2B: Full Document Alignment (semantic_aligner.py)', style='filled', color='gray95', fontsize='14')
+    
+    # Granular semantic alignment steps (full doc)
+    c.node('I1_embed', '_get_embeddings_in_batches\n(with context_window=1 on *all* content)', **style_process)
+    c.node('I1_faiss', 'FAISS (kNN Search)\n(Find k-nearest neighbors for EN->DE and DE->EN)', **style_process)
+    c.node('I1_margin', '_calculate_margin_scores_and_matches\n(Finds mutual best matches, filters by threshold)', **style_process)
+    c.node('I1_pair', 'Enforce 1-to-1 mapping & add unmatched', **style_process)
+    
     c.node('I2', 'final_aligned_pairs', **style_data)
-    c.edge('I1', 'I2')
+    
+    # Edges for Full Document path
+    c.edge('I1_embed', 'I1_faiss')
+    c.edge('I1_faiss', 'I1_margin')
+    c.edge('I1_margin', 'I1_pair')
+    c.edge('I1_pair', 'I2')
 
 # Edge from decision to this path
-dot.edge('G', 'I1', label='Full Document')
+dot.edge('G', 'I1_embed', label='Full Document')
 
-# --- Merge Point ---
-# Node to collect results before evaluation
-dot.node('J', 'final_aligned_pairs', **style_data)
-dot.edge('H9', 'J')
-dot.edge('I2', 'J')
+# --- 5. Merge Point ---
+dot.node('J', 'final_aligned_pairs\n(From ToC or Full Doc)', **style_data)
+dot.edge('H9', 'J') # From ToC path
+dot.edge('I2', 'J') # From Full Doc path
 
-# --- 5. AI Evaluation Pipeline Cluster ---
+# --- 6. AI Evaluation Pipeline Cluster ---
 with dot.subgraph(name='cluster_eval') as c:
-    c.attr(label='Step 3: AI Evaluation Pipeline (Loop per pair)', style='filled', color='gray95')
-    c.node('K1', 'Agent 1:\nevaluate_translation_pair', **style_decision)
-    c.node('K2', 'Agent 2:\n_agent2_validate_finding', **style_decision)
-    c.node('K3', 'Agent 3:\ncheck_context_mismatch', **style_decision)
-    c.node('K4', 'evaluation_results\n(Confirmed Findings)', **style_data)
+    c.attr(label='Step 3: AI Evaluation Pipeline (Loop per pair)', style='filled', color='gray95', fontsize='14')
+    c.node('K1', 'Agent 1:\nevaluate_translation_pair\n(Finds Mistranslation/Omission)', **style_decision)
+    c.node('K2', 'Agent 2:\n_agent2_validate_finding\n(Confirms or Rejects Agent 1)', **style_decision)
+    c.node('K3', 'Agent 3:\ncheck_context_mismatch\n(Runs only if Agent 2 Rejects)', **style_decision)
+    c.node('K4', 'evaluation_results\n(List of Confirmed Findings)', **style_data)
     
     c.edge('K1', 'K2', label='Error Found')
     c.edge('K2', 'K3', label='Reject')
     c.edge('K2', 'K4', label='Confirm')
     c.edge('K3', 'K4') # Add result (or lack thereof)
+    c.edge('K1', 'K4', label='No Error Found') # Path for no error
 
 # Edge from alignment to evaluation
 dot.edge('J', 'K1')
 
-# --- 6. Reporting Cluster ---
+# --- 7. Reporting Cluster ---
 with dot.subgraph(name='cluster_report') as c:
-    c.attr(label='Step 4: Reporting', style='filled', color='gray95')
+    c.attr(label='Step 4: Reporting', style='filled', color='gray95', fontsize='14')
     c.node('L1', 'save_evaluation_report (Excel)', **style_process)
     c.node('L2', 'save_alignment_report (Excel)', **style_process)
     c.node('L3', 'save_sectionwise_debug_report (Excel)\n(if ToC-Based)', **style_process)
@@ -129,12 +170,11 @@ dot.edge('J', 'L2') # Alignment report comes from aligned pairs
 dot.edge('J', 'L3') # Debug report also comes from aligned pairs
 dot.edge('K4', 'L5')
 
-# --- 7. End ---
+# --- 8. End ---
 dot.node('Z', 'End', **style_process)
 dot.edge('L4', 'Z')
 dot.edge('L6', 'Z')
 
 # --- Render the graph ---
 # In Colab, this will display the flowchart inline.
-# To save to a file, you can use dot.render('flowchart_name', view=True, format='png')
 dot
