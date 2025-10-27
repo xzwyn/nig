@@ -1,3 +1,5 @@
+Option Explicit
+
 ' ===== CONFIG =====
 Const ENABLE_DEFRAG As Boolean = True
 Const DEFRAG_MIN_CHARS As Long = 120
@@ -23,6 +25,43 @@ Private Function CleanText(ByVal s As String) As String
     Loop
     CleanText = Trim$(t)
 End Function
+
+' ***** NEW FUNCTION START *****
+Private Function IsIgnorable(ByVal s As String) As Boolean
+    ' This function checks for common "junk" paragraphs
+    ' that result from a bad PDF conversion, like headers/footers.
+    
+    Dim t As String: t = Trim$(LCase$(s))
+    
+    ' Rule 1: Is it just a number? (Common page number footer)
+    If IsNumeric(t) Then
+        IsIgnorable = True
+        Exit Function
+    End If
+    
+    ' Rule 2: Does it look like "Page X" or "Seite X" (for German)?
+    If Len(t) < 30 Then ' Only check short strings
+        ' Check for "page" or "seite" followed by a number
+        If (t Like "page *[0-9]*") Or (t Like "seite *[0-9]*") Then
+            IsIgnorable = True
+            Exit Function
+        End If
+        
+        ' Check for "X / Y" format
+        If (t Like "*[0-9]*/*[0-9]*") Or (t Like "*[0-9]* / *[0-9]*") Then
+            IsIgnorable = True
+            Exit Function
+        End If
+    End If
+    
+    ' Rule 3: Add more rules here for specific company headers/footers
+    ' Example:
+    ' If t = "company confidential" Then IsIgnorable = True: Exit Function
+    ' If t = "internal use only" Then IsIgnorable = True: Exit Function
+    
+    IsIgnorable = False
+End Function
+' ***** NEW FUNCTION END *****
 
 Private Function ParaLen(ByVal s As String) As Long
     ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
@@ -53,16 +92,23 @@ Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolea
     EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
 End Function
 
+' ***** MODIFIED SUB START *****
 Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
     Dim p As Paragraph, tmp As New Collection, s As String
     For Each p In doc.Paragraphs
         s = CleanText(p.Range.Text)
-        If Len(s) > 0 Then tmp.Add s
+        
+        ' MODIFIED LINE: Added check "And Not IsIgnorable(s)"
+        If Len(s) > 0 And Not IsIgnorable(s) Then
+            tmp.Add s
+        End If
+        
     Next
     ReDim texts(1 To tmp.Count)
     Dim i As Long
     For i = 1 To tmp.Count: texts(i) = tmp(i): Next
 End Sub
+' ***** MODIFIED SUB END *****
 
 Private Sub DefragmentParas(ByRef arr() As String)
     If Not ENABLE_DEFRAG Then Exit Sub
@@ -252,6 +298,3 @@ Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef b
         backJ(ni, nj) = pj
     End If
 End Sub
-
-
-
