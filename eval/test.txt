@@ -1,180 +1,257 @@
-import graphviz
+' ===== CONFIG =====
+Const ENABLE_DEFRAG As Boolean = True
+Const DEFRAG_MIN_CHARS As Long = 120
+Const DEFRAG_SENT_ENDS As String = ".?!:;)""]"
 
-# --- Create a new Directed Graph ---
-# We use 'dot' for a top-to-bottom layout
-dot = graphviz.Digraph(comment='Granular Project Flowchart')
-dot.attr(rankdir='TB', label='Granular Translation Alignment & Evaluation Flowchart', fontsize='22', labelloc='t')
+Const PENALTY_1x2 As Double = 12#
+Const PENALTY_2x1 As Double = 12#
+Const PENALTY_2x2 As Double = 20#
+Const PENALTY_SKIP_BASE As Double = 120#
+Const PENALTY_SKIP_PER_CHAR As Double = 0.4
 
-# --- Define Node Styles (3 Colors, All Rectangles) ---
-# Color 1: Data/IO (e.g., files, data structures)
-style_data = {
-    'shape': 'box',
-    'style': 'filled',
-    'fillcolor': 'aliceblue',
-    'fontname': 'Helvetica',
-}
-# Color 2: Processing (e.g., functions, logic steps)
-style_process = {
-    'shape': 'box',
-    'style': 'filled',
-    'fillcolor': 'honeydew',
-    'fontname': 'Helvetica',
-}
-# Color 3: Decisions & AI Agents
-style_decision = {
-    'shape': 'box', # Using a box as requested
-    'style': 'filled',
-    'fillcolor': 'seashell',
-    'fontname': 'Helvetica',
-}
+' ========= UTILITIES =========
+Private Function CleanText(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, ChrW(160), " ")
+    t = Replace(t, vbTab, " ")
+    t = Replace(t, vbCr, " ")
+    t = Replace(t, vbLf, " ")
+    t = Replace(t, Chr(11), " ")
+    t = Replace(t, Chr(7), "")
+    Do While InStr(t, "  ") > 0
+        t = Replace(t, "  ", " ")
+    Loop
+    CleanText = Trim$(t)
+End Function
 
-# --- 1. Start & Inputs ---
-dot.node('A', 'Start (User opens Streamlit App)', **style_process)
-dot.node('B1', 'Upload English PDF', **style_data)
-dot.node('B2', 'Upload German PDF', **style_data)
-dot.edge('A', 'B1')
-dot.edge('A', 'B2')
+Private Function ParaLen(ByVal s As String) As Long
+    ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
+End Function
 
-# --- 2. Granular Pre-processing Cluster ---
-with dot.subgraph(name='cluster_pre') as c:
-    c.attr(label='Step 1: Pre-processing (json_parser.py)', style='filled', color='gray95', fontsize='14')
-    c.node('C1', 'analyze_pdf (Azure Doc Intelligence)', **style_process)
-    c.node('C2', 'analyze_pdf (Azure Doc Intelligence)', **style_process)
-    c.node('D1', 'eng_json_data.json\n(Raw Layout Data)', **style_data)
-    c.node('D2', 'ger_json_data.json\n(Raw Layout Data)', **style_data)
-    
-    # Granular parsing steps
-    c.node('E1', 'process_document_json (Start)', **style_process)
-    c.node('E2', 'Filter paragraphs by role\n(Remove: IGNORED_ROLES like pageHeader, pageFooter)', **style_process)
-    c.node('E3', 'Filter paragraphs\n(Remove: handwritten)', **style_process)
-    c.node('E4', '_convert_table_to_markdown\n(Converts all table objects)', **style_process)
-    c.node('E5', 'Collect all clean paragraphs & markdown tables', **style_process)
-    # c.node('E6', 'Sort all content by document character offset', **style_process)
-    c.node('E6', 'Stitch adjacent text blocks into paragraphs\n(Stop stitching at punctuation or STRUCTURAL_ROLES like title)', **style_process)
-    
-    c.node('F', 'full_english_content\nfull_german_content\n(Clean, Stitched Content List)', **style_data)
-    
-    # Edges for pre-processing
-    c.edge('B1', 'C1')
-    c.edge('B2', 'C2')
-    c.edge('C1', 'D1')
-    c.edge('C2', 'D2')
-    c.edges([('D1', 'E1'), ('D2', 'E1')]) # Both JSONs are processed
-    c.edge('E1', 'E2')
-    c.edge('E2', 'E3')
-    c.edge('E3', 'E4')
-    c.edge('E4', 'E5')
-    c.edge('E5', 'E6')
-    c.edge('E6', 'E7')
-    c.edge('E7', 'F')
+Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Long
+    Dim i As Long, N As Long
+    For i = i1 To i2: N = N + ParaLen(arr(i)): Next
+    SumLen = N
+End Function
 
-# --- 3. Decision Point ---
-dot.node('G', 'Select Alignment Mode?', **style_decision)
-dot.edge('F', 'G')
+Private Function JoinRange(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As String
+    Dim i As Long, t As String
+    For i = i1 To i2
+        If Len(arr(i)) > 0 Then
+            If Len(t) > 0 Then
+                t = t & vbCrLf & arr(i)
+            Else
+                t = arr(i)
+            End If
+        End If
+    Next
+    JoinRange = t
+End Function
 
-# --- 4A. Path A: ToC-Based Alignment Cluster ---
-with dot.subgraph(name='cluster_toc') as c:
-    c.attr(label='Step 2A: ToC-Based Alignment (toc_aligner.py, semantic_aligner.py)', style='filled', color='gray95', fontsize='14')
-    c.node('H1', 'get_toc_text_from_pdf_bytes', **style_process)
-    c.node('H2', 'structure_toc (Regex)', **style_process)
-    c.node('H3', 'align_tocs (Hungarian Algorithm)', **style_process)
-    c.node('H4', 'aligned_sections', **style_data)
-    c.node('H5', 'Loop:\nFor each aligned section...', **style_process)
-    c.node('H6', 'Filter content by section pages', **style_process)
-    
-    # Granular semantic alignment steps (inside loop)
-    c.node('H7_embed', '_get_embeddings_in_batches\n(with context_window=1)', **style_process)
-    c.node('H7_faiss', 'FAISS (kNN Search)\n(Find k-nearest neighbors for EN->DE and DE->EN)', **style_process)
-    c.node('H7_margin', '_calculate_margin_scores_and_matches\n(Finds mutual best matches, filters by threshold)', **style_process)
-    c.node('H7_pair', 'Enforce 1-to-1 mapping & add unmatched', **style_process)
-    
-    c.node('H8', 'section_pairs', **style_data)
-    c.node('H9', 'Collate all section_pairs', **style_process)
+Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolean
+    If Len(s) = 0 Then Exit Function
+    EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
+End Function
 
-    # Edges for ToC path
-    c.edge('H1', 'H2')
-    c.edge('H2', 'H3')
-    c.edge('H3', 'H4')
-    c.edge('H4', 'H5')
-    c.edge('H5', 'H6')
-    c.edge('H6', 'H7_embed')
-    c.edge('H7_embed', 'H7_faiss')
-    c.edge('H7_faiss', 'H7_margin')
-    c.edge('H7_margin', 'H7_pair')
-    c.edge('H7_pair', 'H8')
-    c.edge('H8', 'H5') # Loop back
-    c.edge('H5', 'H9')
+Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
+    Dim p As Paragraph, tmp As New Collection, s As String
+    For Each p In doc.Paragraphs
+        s = CleanText(p.Range.Text)
+        If Len(s) > 0 Then tmp.Add s
+    Next
+    ReDim texts(1 To tmp.Count)
+    Dim i As Long
+    For i = 1 To tmp.Count: texts(i) = tmp(i): Next
+End Sub
 
-# Edge from decision to this path
-dot.edge('G', 'H1', label='ToC-Based')
+Private Sub DefragmentParas(ByRef arr() As String)
+    If Not ENABLE_DEFRAG Then Exit Sub
+    If UBound(arr) < 2 Then Exit Sub
+    Dim outCol As New Collection, i As Long, buf As String
+    For i = LBound(arr) To UBound(arr)
+        If Len(buf) = 0 Then
+            buf = arr(i)
+        Else
+            buf = buf & " " & arr(i)
+        End If
+        Dim enough As Boolean
+        enough = (ParaLen(buf) >= DEFRAG_MIN_CHARS) Or EndsWithAny(buf, DEFRAG_SENT_ENDS)
+        If enough Then outCol.Add Trim$(buf): buf = ""
+    Next
+    If Len(buf) > 0 Then outCol.Add Trim$(buf)
+    ReDim arr(1 To outCol.Count)
+    For i = 1 To outCol.Count: arr(i) = outCol(i): Next
+End Sub
 
-# --- 4B. Path B: Full Document Alignment Cluster ---
-with dot.subgraph(name='cluster_full') as c:
-    c.attr(label='Step 2B: Full Document Alignment (semantic_aligner.py)', style='filled', color='gray95', fontsize='14')
-    
-    # Granular semantic alignment steps (full doc)
-    c.node('I1_embed', '_get_embeddings_in_batches\n(with context_window=1 on *all* content)', **style_process)
-    c.node('I1_faiss', 'FAISS (kNN Search)\n(Find k-nearest neighbors for EN->DE and DE->EN)', **style_process)
-    c.node('I1_margin', '_calculate_margin_scores_and_matches\n(Finds mutual best matches, filters by threshold)', **style_process)
-    c.node('I1_pair', 'Enforce 1-to-1 mapping & add unmatched', **style_process)
-    
-    c.node('I2', 'final_aligned_pairs', **style_data)
-    
-    # Edges for Full Document path
-    c.edge('I1_embed', 'I1_faiss')
-    c.edge('I1_faiss', 'I1_margin')
-    c.edge('I1_margin', 'I1_pair')
-    c.edge('I1_pair', 'I2')
+Private Function BrowseForFile(prompt As String) As String
+    Dim fd As FileDialog
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+    With fd
+        .Title = prompt
+        .Filters.Clear
+        .Filters.Add "PDF Files", "*.pdf"
+        .AllowMultiSelect = False
+        If .Show <> -1 Then Exit Function
+        BrowseForFile = .SelectedItems(1)
+    End With
+End Function
 
-# Edge from decision to this path
-dot.edge('G', 'I1_embed', label='Full Document')
+Private Function ConvertPdfToDocx(pdfPath As String) As String
+    Dim doc As Document, docxPath As String
+    docxPath = Replace(pdfPath, ".pdf", ".docx")
+    Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False)
+    doc.SaveAs2 FileName:=docxPath, FileFormat:=wdFormatXMLDocument
+    doc.Close SaveChanges:=False
+    ConvertPdfToDocx = docxPath
+End Function
 
-# --- 5. Merge Point ---
-dot.node('J', 'final_aligned_pairs\n(From ToC or Full Doc)', **style_data)
-dot.edge('H9', 'J') # From ToC path
-dot.edge('I2', 'J') # From Full Doc path
+' ========= MAIN =========
+Public Sub AlignTranslatedParagraphs_AutoPick()
+    ' Browse for first PDF file
+    Dim enPDF As String
+    enPDF = BrowseForFile("Select the FIRST PDF file (e.g., English):")
+    If enPDF = "" Then
+        MsgBox "No file selected. Operation cancelled.", vbExclamation
+        Exit Sub
+    End If
 
-# --- 6. AI Evaluation Pipeline Cluster ---
-with dot.subgraph(name='cluster_eval') as c:
-    c.attr(label='Step 3: AI Evaluation Pipeline (Loop per pair)', style='filled', color='gray95', fontsize='14')
-    c.node('K1', 'Agent 1:\nevaluate_translation_pair\n(Finds Mistranslation/Omission)', **style_decision)
-    c.node('K2', 'Agent 2:\n_agent2_validate_finding\n(Confirms or Rejects Agent 1)', **style_decision)
-    c.node('K3', 'Agent 3:\ncheck_context_mismatch\n(Runs only if Agent 2 Rejects)', **style_decision)
-    c.node('K4', 'evaluation_results\n(List of Confirmed Findings)', **style_data)
-    
-    c.edge('K1', 'K2', label='Error Found')
-    c.edge('K2', 'K3', label='Reject')
-    c.edge('K2', 'K4', label='Confirm')
-    c.edge('K3', 'K4') # Add result (or lack thereof)
-    c.edge('K1', 'K4', label='No Error Found') # Path for no error
+    ' Browse for second PDF file
+    Dim dePDF As String
+    dePDF = BrowseForFile("Select the SECOND PDF file (e.g., German):")
+    If dePDF = "" Then
+        MsgBox "No file selected. Operation cancelled.", vbExclamation
+        Exit Sub
+    End If
 
-# Edge from alignment to evaluation
-dot.edge('J', 'K1')
+    MsgBox "Selected files:" & vbCrLf & "First: " & enPDF & vbCrLf & "Second: " & dePDF, vbInformation
 
-# --- 7. Reporting Cluster ---
-with dot.subgraph(name='cluster_report') as c:
-    c.attr(label='Step 4: Reporting', style='filled', color='gray95', fontsize='14')
-    c.node('L1', 'save_evaluation_report (Excel)', **style_process)
-    c.node('L2', 'save_alignment_report (Excel)', **style_process)
-    c.node('L3', 'save_sectionwise_debug_report (Excel)\n(if ToC-Based)', **style_process)
-    c.node('L4', 'display_results (Streamlit UI)', **style_process)
-    c.node('L5', 'create_excel_report_in_memory', **style_process)
-    c.node('L6', 'Download Report Button', **style_data)
-    
-    c.edge('L5', 'L6')
+    ' Convert PDFs
+    Dim enDocx As String, deDocx As String
+    enDocx = ConvertPdfToDocx(enPDF)
+    deDocx = ConvertPdfToDocx(dePDF)
+    MsgBox "Converted to DOCX successfully." & vbCrLf & enDocx & vbCrLf & deDocx, vbInformation
 
-# Edges from evaluation to reporting
-dot.edge('K4', 'L1')
-dot.edge('K4', 'L4')
-dot.edge('J', 'L2') # Alignment report comes from aligned pairs
-dot.edge('J', 'L3') # Debug report also comes from aligned pairs
-dot.edge('K4', 'L5')
+    ' Open
+    Dim enDoc As Document, deDoc As Document
+    Set enDoc = Documents.Open(enDocx, ReadOnly:=True)
+    Set deDoc = Documents.Open(deDocx, ReadOnly:=True)
 
-# --- 8. End ---
-dot.node('Z', 'End', **style_process)
-dot.edge('L4', 'Z')
-dot.edge('L6', 'Z')
+    ' Paragraphs
+    Dim EN() As String, DE() As String
+    CollectParagraphs enDoc, EN
+    CollectParagraphs deDoc, DE
+    DefragmentParas EN: DefragmentParas DE
 
-# --- Render the graph ---
-# In Colab, this will display the flowchart inline.
-dot
+    ' Ratio
+    Dim i As Long, sumEN As Long, sumDE As Long
+    For i = LBound(EN) To UBound(EN): sumEN = sumEN + ParaLen(EN(i)): Next
+    For i = LBound(DE) To UBound(DE): sumDE = sumDE + ParaLen(DE(i)): Next
+    Dim r As Double
+    If sumEN > 0 Then
+        r = sumDE / sumEN
+    Else
+        r = 1#
+    End If
+
+    ' DP arrays
+    Dim N As Long, M As Long: N = UBound(EN): M = UBound(DE)
+    Dim cost() As Double, backA() As Integer, backI() As Long, backJ() As Long
+    ReDim cost(0 To N, 0 To M): ReDim backA(0 To N, 0 To M)
+    ReDim backI(0 To N, 0 To M): ReDim backJ(0 To N, 0 To M)
+    Dim INF As Double: INF = 1E+30
+    Dim j As Long
+    For i = 0 To N: For j = 0 To M: cost(i, j) = INF: Next: Next
+    cost(0, 0) = 0
+
+    Dim c As Double
+    For i = 0 To N
+        For j = 0 To M
+            If cost(i, j) < INF Then
+                ' 1x1 alignment
+                If i + 1 <= N And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 1, r, 0#)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 1, cost(i, j) + c, 1, i, j
+                End If
+                ' 1x2 alignment
+                If i + 1 <= N And j + 2 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 2, r, PENALTY_1x2)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 2, cost(i, j) + c, 2, i, j
+                End If
+                ' 2x1 alignment
+                If i + 2 <= N And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 1, r, PENALTY_2x1)
+                    UpdateCell cost, backA, backI, backJ, i + 2, j + 1, cost(i, j) + c, 3, i, j
+                End If
+                ' Skip EN paragraph
+                If i + 1 <= N Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(EN(i + 1))
+                    UpdateCell cost, backA, backI, backJ, i + 1, j, cost(i, j) + c, 5, i, j
+                End If
+                ' Skip DE paragraph
+                If j + 1 <= M Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(DE(j + 1))
+                    UpdateCell cost, backA, backI, backJ, i, j + 1, cost(i, j) + c, 6, i, j
+                End If
+            End If
+        Next
+    Next
+
+    ' Backtrack
+    Dim pairs As New Collection, i1 As Long: i1 = N
+    Dim j1 As Long: j1 = M
+    Do While Not (i1 = 0 And j1 = 0)
+        Dim a As Integer, pi As Long, pj As Long, rec As Variant
+        a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
+        rec = Array(a, pi + 1, i1, pj + 1, j1)
+        pairs.Add rec
+        i1 = pi: j1 = pj
+    Loop
+
+    ' Close source documents
+    enDoc.Close SaveChanges:=False
+    deDoc.Close SaveChanges:=False
+
+    ' Output table
+    Dim outDoc As Document: Set outDoc = Documents.Add
+    Dim rows As Long: rows = pairs.Count + 1
+    Dim tbl As Table
+    Set tbl = outDoc.Tables.Add(Range:=outDoc.Range(0, 0), NumRows:=rows, NumColumns:=3)
+    tbl.Style = "Table Grid"
+    tbl.Cell(1, 1).Range.Text = "English"
+    tbl.Cell(1, 2).Range.Text = "German"
+    tbl.Cell(1, 3).Range.Text = "Mapping"
+Dim k As Long, rcd As Variant, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long
+For k = pairs.Count To 1 Step -1
+    rcd = pairs(k)
+    a = rcd(0): enFrom = rcd(1): enTo = rcd(2): deFrom = rcd(3): deTo = rcd(4)
+    Dim rowIx As Long: rowIx = pairs.Count - k + 2
+    tbl.Cell(rowIx, 1).Range.Text = JoinRange(EN, enFrom, enTo)
+    tbl.Cell(rowIx, 2).Range.Text = JoinRange(DE, deFrom, deTo)
+    tbl.Cell(rowIx, 3).Range.Text = enFrom & "-" & enTo & " ? " & deFrom & "-" & deTo
+Next
+
+' Auto-fit table
+tbl.AutoFitBehavior wdAutoFitContent
+tbl.AutoFitBehavior wdAutoFitWindow
+
+MsgBox "Alignment complete. Table ready in new document.", vbInformation
+End Sub
+
+Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
+    Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
+    Dim lenDE As Long: lenDE = SumLen(DE, dj1, dj2)
+    Dim dev As Double: dev = Abs(lenDE - lenEN * ratio)
+    AlignCost = dev ^ 0.9 + penalty
+End Function
+
+Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef backI() As Long, ByRef backJ() As Long, ni As Long, nj As Long, newCost As Double, action As Integer, pi As Long, pj As Long)
+    If newCost < cost(ni, nj) Then
+        cost(ni, nj) = newCost
+        backA(ni, nj) = action
+        backI(ni, nj) = pi
+        backJ(ni, nj) = pj
+    End If
+End Sub
+
+
+
