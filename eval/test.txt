@@ -1,88 +1,83 @@
-// src/clients/doc_intelligence_client.py
-import os
 import json
-from datetime import datetime
-from pathlib import Path
+import pandas as pd
+from itertools import zip_longest
+import os # Optional: for better path handling if needed
 
-from azure.core.credentials import AzureKeyCredential
-from azure.ai.documentintelligence import DocumentIntelligenceClient
-# --- DELETED ---
-# We removed the import for ContentFormat
-# --- END DELETED ---
+def extract_headings(json_path):
+    """
+    Extracts content from paragraphs with specific roles (title, sectionHeading, pageHeader)
+    from an Azure Document Intelligence layout model JSON file.
 
-import config
+    Args:
+        json_path (str): The path to the JSON file.
 
-def analyze_pdf(pdf_bytes: bytes, original_filename: str) -> dict:
-    endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
-    key = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
-
-    if not endpoint or not key:
-        raise ValueError(
-            "Azure Document Intelligence credentials are not configured. "
-            "Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY in your .env file."
-        )
-
-    print(f"Connecting to Document Intelligence service for '{original_filename}'...")
-    client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
-
-    # --- MODIFIED ---
-    # Request the "markdown" content format using its string name
-    poller = client.begin_analyze_document(
-        model_id="prebuilt-layout", 
-        body=pdf_bytes, 
-        content_type="application/pdf",
-        output_content_format="markdown"  # <-- CHANGED THIS LINE
-    )
-    # --- END MODIFIED ---
-    
-    result = poller.result()
-    print("-> Analysis complete.")
-
-    # --- Setup output paths ---
-    output_dir = Path(config.OUTPUT_DIR)
-    output_dir.mkdir(exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_name = Path(original_filename).stem
-
-    # --- NEW: Save raw Markdown output ---
-    if result.content:
-        output_md_filename = f"doc_intelligence_raw_{base_name}_{timestamp}.md"
-        output_md_path = output_dir / output_md_filename
-        try:
-            with open(output_md_path, 'w', encoding='utf-8') as f:
-                f.write(result.content)
-            print(f"-> Saved raw Markdown output to '{output_md_path}'")
-        except Exception as e:
-            print(f"Warning: Could not save raw Markdown output. Reason: {e}")
-    # --- END NEW ---
-
-    # Robust serialization across SDK versions; wrap with expected top-level key
+    Returns:
+        list: A list of heading content strings.
+    """
+    headings = []
+    print(f"Reading file: {json_path}")
     try:
-        ar_dict = result.as_dict()  # newer SDKs
-    except AttributeError:
-        try:
-            ar_dict = result.to_dict()  # older SDKs
-        except AttributeError:
-            # Manual fallback
-            ar_dict = {
-                "content": getattr(result, "content", ""),
-                "pages": [p.as_dict() if hasattr(p, "as_dict") else (p.to_dict() if hasattr(p, "to_dict") else {}) for p in getattr(result, "pages", [])],
-                "paragraphs": [x.as_dict() if hasattr(x, "as_dict") else (x.to_dict() if hasattr(x, "to_dict") else {}) for x in getattr(result, "paragraphs", [])],
-                "tables": [t.as_dict() if hasattr(t, "as_dict") else (t.to_dict() if hasattr(t, "to_dict") else {}) for t in getattr(result, "tables", [])],
-                "styles": [s.as_dict() if hasattr(s, "as_dict") else (s.to_dict() if hasattr(s, "to_dict") else {}) for s in getattr(result, "styles", [])],
-            }
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
 
-    result_dict = {"analyzeResult": ar_dict}
+        # Safely navigate to the paragraphs list
+        analyze_result = data.get('analyzeResult', {})
+        paragraphs = analyze_result.get('paragraphs', [])
 
-    # Save JSON for reference
-    output_filename = f"doc_intelligence_{base_name}_{timestamp}.json"
-    output_path = output_dir / output_filename
+        if not paragraphs:
+            print(f"Warning: No paragraphs found or 'paragraphs' key missing in {json_path}")
+            return headings
 
-    try:
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(result_dict, f, ensure_ascii=False, indent=4)
-        print(f"-> Saved Document Intelligence JSON to '{output_path}'")
+        # Define the roles we consider as headings/structural elements
+        desired_roles = {'title', 'sectionHeading', 'pageHeader'}
+
+        for paragraph in paragraphs:
+            role = paragraph.get('role') # Use .get() for safety
+            if role in desired_roles:
+                content = paragraph.get('content', '').strip() # Get content safely and strip whitespace
+                if content: # Add only if content is not empty
+                    headings.append(content)
+
+        print(f"Found {len(headings)} headings in {os.path.basename(json_path)}.")
+
+    except FileNotFoundError:
+        print(f"Error: File not found at {json_path}")
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from {json_path}. Check if the file is valid.")
     except Exception as e:
-        print(f"Warning: Could not save JSON output for '{original_filename}'. Reason: {e}")
+        print(f"An unexpected error occurred while processing {json_path}: {e}")
 
-    return result_dict
+    return headings
+
+# --- Main execution ---
+if __name__ == "__main__":
+    # --- IMPORTANT: Set your file paths here ---
+    english_json_path = "REPLACE_WITH_PATH/TO_YOUR/english_file.json"
+    german_json_path = "REPLACE_WITH_PATH/TO_YOUR/german_file.json" # You can use the '67g.pdf.json' path you provided
+    output_excel_path = "headings_comparison.xlsx"
+    # ------------------------------------------
+
+    # Check if placeholder paths are still present
+    if "REPLACE_WITH_PATH" in english_json_path or "REPLACE_WITH_PATH" in german_json_path:
+         print("!!! Please update the 'english_json_path' and 'german_json_path' variables in the script with your actual file paths before running. !!!")
+    else:
+        # Extract headings from both files
+        english_headings = extract_headings(english_json_path)
+        german_headings = extract_headings(german_json_path)
+
+        # Combine the lists row by row, filling shorter lists with empty strings
+        # zip_longest stops when the longest iterable is exhausted
+        combined_data = list(zip_longest(english_headings, german_headings, fillvalue=''))
+
+        # Create a pandas DataFrame
+        df = pd.DataFrame(combined_data, columns=['English Headings', 'German Headings'])
+
+        # Save the DataFrame to an Excel file
+        try:
+            df.to_excel(output_excel_path, index=False, engine='openpyxl') # Using openpyxl engine
+            print(f"\nSuccessfully created Excel file: {output_excel_path}")
+        except ImportError:
+             print("\nError: 'openpyxl' library is required to write Excel files.")
+             print("Please install it using: pip install openpyxl")
+        except Exception as e:
+            print(f"\nError saving Excel file: {e}")
