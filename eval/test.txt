@@ -3,18 +3,18 @@ import pandas as pd
 from itertools import zip_longest
 import os # Optional: for better path handling if needed
 
-def extract_headings(json_path):
+def extract_content(json_path):
     """
-    Extracts content from paragraphs with specific roles (title, sectionHeading, pageHeader)
-    from an Azure Document Intelligence layout model JSON file.
+    Extracts content from paragraphs identified as titles or section headings
+    from an Azure Document Intelligence layout model JSON file, excluding headers/footers.
 
     Args:
         json_path (str): The path to the JSON file.
 
     Returns:
-        list: A list of heading content strings.
+        list: A list of content strings.
     """
-    headings = []
+    content_list = []
     print(f"Reading file: {json_path}")
     try:
         with open(json_path, 'r', encoding='utf-8') as f:
@@ -26,19 +26,24 @@ def extract_headings(json_path):
 
         if not paragraphs:
             print(f"Warning: No paragraphs found or 'paragraphs' key missing in {json_path}")
-            return headings
+            return content_list
 
-        # Define the roles we consider as headings/structural elements
-        desired_roles = {'title', 'sectionHeading', 'pageHeader'}
+        # Define the roles we want to INCLUDE (excluding pageHeader, pageFooter)
+        desired_roles = {'title', 'sectionHeading'}
+        # Define roles to EXPLICITLY EXCLUDE
+        excluded_roles = {'pageHeader', 'pageFooter'}
 
         for paragraph in paragraphs:
             role = paragraph.get('role') # Use .get() for safety
-            if role in desired_roles:
-                content = paragraph.get('content', '').strip() # Get content safely and strip whitespace
-                if content: # Add only if content is not empty
-                    headings.append(content)
+            # Include if it has a desired role OR if it has NO role (treating it as body text)
+            # AND explicitly exclude header/footer roles
+            if role not in excluded_roles: # Check exclusion first
+                if role in desired_roles or role is None: # Include desired roles or general text
+                     content = paragraph.get('content', '').strip() # Get content safely and strip whitespace
+                     if content: # Add only if content is not empty
+                         content_list.append(content)
 
-        print(f"Found {len(headings)} headings in {os.path.basename(json_path)}.")
+        print(f"Found {len(content_list)} relevant content blocks in {os.path.basename(json_path)}.")
 
     except FileNotFoundError:
         print(f"Error: File not found at {json_path}")
@@ -47,30 +52,29 @@ def extract_headings(json_path):
     except Exception as e:
         print(f"An unexpected error occurred while processing {json_path}: {e}")
 
-    return headings
+    return content_list
 
 # --- Main execution ---
 if __name__ == "__main__":
     # --- IMPORTANT: Set your file paths here ---
     english_json_path = "REPLACE_WITH_PATH/TO_YOUR/english_file.json"
     german_json_path = "REPLACE_WITH_PATH/TO_YOUR/german_file.json" # You can use the '67g.pdf.json' path you provided
-    output_excel_path = "headings_comparison.xlsx"
+    output_excel_path = "content_comparison_no_headers_footers.xlsx" # Changed output filename
     # ------------------------------------------
 
     # Check if placeholder paths are still present
     if "REPLACE_WITH_PATH" in english_json_path or "REPLACE_WITH_PATH" in german_json_path:
          print("!!! Please update the 'english_json_path' and 'german_json_path' variables in the script with your actual file paths before running. !!!")
     else:
-        # Extract headings from both files
-        english_headings = extract_headings(english_json_path)
-        german_headings = extract_headings(german_json_path)
+        # Extract content from both files
+        english_content = extract_content(english_json_path)
+        german_content = extract_content(german_json_path)
 
         # Combine the lists row by row, filling shorter lists with empty strings
-        # zip_longest stops when the longest iterable is exhausted
-        combined_data = list(zip_longest(english_headings, german_headings, fillvalue=''))
+        combined_data = list(zip_longest(english_content, german_content, fillvalue=''))
 
         # Create a pandas DataFrame
-        df = pd.DataFrame(combined_data, columns=['English Headings', 'German Headings'])
+        df = pd.DataFrame(combined_data, columns=['English Content', 'German Content']) # Updated column names
 
         # Save the DataFrame to an Excel file
         try:
