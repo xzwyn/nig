@@ -53,8 +53,8 @@ def extract_headings(json_path):
 # --- Main execution ---
 if __name__ == "__main__":
     # --- IMPORTANT: Set your file paths here ---
-    english_json_path = "REPLACE_WITH_PATH/TO_YOUR/english_file.json"
-    german_json_path = "REPLACE_WITH_PATH/TO_YOUR/german_file.json" # You can use the '67g.pdf.json' path you provided
+    english_json_path = "doc_intelligence_en-allianz-se-annual-report-2024_20251023_133509.json"
+    german_json_path = "doc_intelligence_de-allianz-se-geschaeftsbericht-2024_20251023_133658.json" # You can use the '67g.pdf.json' path you provided
     output_excel_path = "headings_comparison_no_headers.xlsx" # Changed output filename
     # ------------------------------------------
 
