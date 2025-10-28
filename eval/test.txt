@@ -1,83 +1,195 @@
-import json
 import pandas as pd
-from itertools import zip_longest
-import os # Optional: for better path handling if needed
+import numpy as np
+import os
+from openai import AzureOpenAI
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cosine
+from dotenv import load_dotenv
+import time # To handle potential rate limits
 
-def extract_headings(json_path):
-    """
-    Extracts content from paragraphs with specific roles (title, sectionHeading)
-    from an Azure Document Intelligence layout model JSON file, excluding headers/footers.
+# --- Configuration ---
+load_dotenv() # Load variables from .env file
 
-    Args:
-        json_path (str): The path to the JSON file.
+AZURE_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
+AZURE_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+AZURE_EMBEDDING_DEPLOYMENT = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
 
-    Returns:
-        list: A list of heading content strings.
-    """
-    headings = []
-    print(f"Reading file: {json_path}")
-    try:
-        with open(json_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+# Check if environment variables are loaded
+if not all([AZURE_API_KEY, AZURE_ENDPOINT, AZURE_EMBEDDING_DEPLOYMENT]):
+    raise ValueError("Azure OpenAI environment variables not set. Please create a .env file.")
 
-        # Safely navigate to the paragraphs list
-        analyze_result = data.get('analyzeResult', {})
-        paragraphs = analyze_result.get('paragraphs', [])
+# Initialize Azure OpenAI client
+try:
+    client = AzureOpenAI(
+        api_key=AZURE_API_KEY,
+        api_version="2024-02-01", # Use an appropriate API version
+        azure_endpoint=AZURE_ENDPOINT
+    )
+except Exception as e:
+    print(f"Error initializing AzureOpenAI client: {e}")
+    exit()
 
-        if not paragraphs:
-            print(f"Warning: No paragraphs found or 'paragraphs' key missing in {json_path}")
-            return headings
+# --- Functions ---
 
-        # --- MODIFIED: Define the roles we consider as headings (excluding headers/footers) ---
-        desired_roles = {'title', 'sectionHeading'}
-        # -------------------------------------------------------------------------------------
+def get_embeddings(texts, max_retries=5, delay=5):
+    """Gets embeddings for a list of texts using Azure OpenAI."""
+    # Filter out empty or non-string inputs before making the API call
+    valid_texts = [str(text) for text in texts if text and isinstance(text, str)]
+    if not valid_texts:
+        print("Warning: No valid texts provided to get_embeddings.")
+        return [] # Return empty list if no valid texts
 
-        for paragraph in paragraphs:
-            role = paragraph.get('role') # Use .get() for safety
-            if role in desired_roles:
-                content = paragraph.get('content', '').strip() # Get content safely and strip whitespace
-                if content: # Add only if content is not empty
-                    headings.append(content)
+    print(f"Requesting embeddings for {len(valid_texts)} texts...")
+    for attempt in range(max_retries):
+        try:
+            response = client.embeddings.create(
+                input=valid_texts,
+                model=AZURE_EMBEDDING_DEPLOYMENT
+            )
+            embeddings = [item.embedding for item in response.data]
+            print("Embeddings received successfully.")
+            return embeddings
+        except Exception as e: # Catch potential API errors (like rate limits)
+            print(f"Attempt {attempt + 1} failed: Error getting embeddings - {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                print("Max retries reached. Failed to get embeddings.")
+                raise # Re-raise the exception after max retries
+    return [] # Should not be reached if raise works, but added for safety
 
-        print(f"Found {len(headings)} title/section headings in {os.path.basename(json_path)}.")
+def calculate_cost_matrix(embeddings1, embeddings2):
+    """Calculates the cosine distance matrix between two sets of embeddings."""
+    num1 = len(embeddings1)
+    num2 = len(embeddings2)
+    cost_matrix = np.zeros((num1, num2))
 
-    except FileNotFoundError:
-        print(f"Error: File not found at {json_path}")
-    except json.JSONDecodeError:
-        print(f"Error: Could not decode JSON from {json_path}. Check if the file is valid.")
-    except Exception as e:
-        print(f"An unexpected error occurred while processing {json_path}: {e}")
+    for i in range(num1):
+        for j in range(num2):
+            # Cosine distance = 1 - cosine similarity
+            cost_matrix[i, j] = cosine(embeddings1[i], embeddings2[j])
+    print("Cost matrix calculated.")
+    return cost_matrix
 
-    return headings
-
-# --- Main execution ---
+# --- Main Execution ---
 if __name__ == "__main__":
     # --- IMPORTANT: Set your file paths here ---
-    english_json_path = "doc_intelligence_en-allianz-se-annual-report-2024_20251023_133509.json"
-    german_json_path = "doc_intelligence_de-allianz-se-geschaeftsbericht-2024_20251023_133658.json" # You can use the '67g.pdf.json' path you provided
-    output_excel_path = "headings_comparison_no_headers.xlsx" # Changed output filename
+    input_excel_path = "headings_comparison_no_headers.xlsx" # From the previous step
+    output_excel_path = "semantically_matched_headings.xlsx"
+    english_col_name = 'English Headings'
+    german_col_name = 'German Headings'
     # ------------------------------------------
 
-    # Check if placeholder paths are still present
-    if "REPLACE_WITH_PATH" in english_json_path or "REPLACE_WITH_PATH" in german_json_path:
-         print("!!! Please update the 'english_json_path' and 'german_json_path' variables in the script with your actual file paths before running. !!!")
-    else:
-        # Extract headings from both files
-        english_headings = extract_headings(english_json_path)
-        german_headings = extract_headings(german_json_path)
+    # 1. Read Excel file
+    try:
+        df_input = pd.read_excel(input_excel_path)
+        print(f"Read input Excel: {input_excel_path}")
+    except FileNotFoundError:
+        print(f"Error: Input Excel file not found at {input_excel_path}")
+        exit()
+    except Exception as e:
+        print(f"Error reading Excel file: {e}")
+        exit()
 
-        # Combine the lists row by row, filling shorter lists with empty strings
-        combined_data = list(zip_longest(english_headings, german_headings, fillvalue=''))
+    # 2. Extract and clean headings (remove NaN/empty strings)
+    english_headings_raw = df_input[english_col_name].dropna().astype(str).tolist()
+    german_headings_raw = df_input[german_col_name].dropna().astype(str).tolist()
 
-        # Create a pandas DataFrame
-        df = pd.DataFrame(combined_data, columns=['English Headings', 'German Headings'])
+    english_headings = [h for h in english_headings_raw if h.strip()]
+    german_headings = [h for h in german_headings_raw if h.strip()]
 
-        # Save the DataFrame to an Excel file
-        try:
-            df.to_excel(output_excel_path, index=False, engine='openpyxl') # Using openpyxl engine
-            print(f"\nSuccessfully created Excel file: {output_excel_path}")
-        except ImportError:
-             print("\nError: 'openpyxl' library is required to write Excel files.")
-             print("Please install it using: pip install openpyxl")
-        except Exception as e:
-            print(f"\nError saving Excel file: {e}")
+    print(f"Cleaned English headings: {len(english_headings)}")
+    print(f"Cleaned German headings: {len(german_headings)}")
+
+    if not english_headings or not german_headings:
+        print("Error: One or both heading lists are empty after cleaning.")
+        exit()
+
+    # 3. Get Embeddings
+    try:
+        english_embeddings = get_embeddings(english_headings)
+        german_embeddings = get_embeddings(german_headings)
+    except Exception as e:
+        print(f"Stopping script due to embedding error: {e}")
+        exit()
+
+
+    if not english_embeddings or not german_embeddings:
+        print("Error: Failed to retrieve embeddings for one or both languages.")
+        exit()
+
+    # Ensure embedding list length matches heading list length (after potential filtering in get_embeddings)
+    if len(english_embeddings) != len(english_headings) or len(german_embeddings) != len(german_headings):
+       print("Mismatch between number of headings and number of embeddings retrieved. Check API responses or filtering.")
+       # Optional: Decide how to handle this - exit, or try to proceed with matched counts? Exiting is safer.
+       exit()
+
+    # 4. Calculate Cost Matrix
+    cost_matrix = calculate_cost_matrix(english_embeddings, german_embeddings)
+
+    # 5. Apply Hungarian Algorithm (Linear Sum Assignment)
+    # This finds the optimal assignment to minimize the total cost (distance)
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    print("Hungarian algorithm applied.")
+
+    # 6. Prepare Output Data
+    matched_pairs = []
+    min_len = min(len(english_headings), len(german_headings)) # Use min_len based on actual matched indices length
+
+    # Get the costs (distances) of the optimal assignments
+    optimal_costs = cost_matrix[row_ind, col_ind]
+
+    for i in range(len(row_ind)):
+         eng_idx = row_ind[i]
+         ger_idx = col_ind[i]
+         # Ensure indices are within bounds (should be if lists aren't empty)
+         if eng_idx < len(english_headings) and ger_idx < len(german_headings):
+            cost = optimal_costs[i]
+            similarity = 1 - cost # Convert distance back to similarity
+            matched_pairs.append({
+                'English Heading': english_headings[eng_idx],
+                'Matched German Heading': german_headings[ger_idx],
+                'Cosine Similarity': similarity
+            })
+         else:
+              print(f"Warning: Index out of bounds during matching. Eng idx: {eng_idx}, Ger idx: {ger_idx}. Skipping this pair.")
+
+
+    # Add unmatched headings (if lists were of different lengths)
+    # Note: The Hungarian algorithm pairs up to the length of the smaller dimension.
+    # We can identify unmatched items by checking indices.
+    matched_english_indices = set(row_ind)
+    matched_german_indices = set(col_ind)
+
+    unmatched_english = [h for i, h in enumerate(english_headings) if i not in matched_english_indices]
+    unmatched_german = [h for i, h in enumerate(german_headings) if i not in matched_german_indices]
+
+    # Append unmatched items to the list, padding the other columns
+    for eng in unmatched_english:
+        matched_pairs.append({
+            'English Heading': eng,
+            'Matched German Heading': '',
+            'Cosine Similarity': np.nan # Or 0, or None
+        })
+    for ger in unmatched_german:
+         matched_pairs.append({
+            'English Heading': '',
+            'Matched German Heading': ger,
+            'Cosine Similarity': np.nan # Or 0, or None
+        })
+
+
+    # 7. Create Output DataFrame and Save to Excel
+    df_output = pd.DataFrame(matched_pairs)
+    # Optional: Sort by similarity
+    df_output = df_output.sort_values(by='Cosine Similarity', ascending=False, na_position='last')
+
+    try:
+        df_output.to_excel(output_excel_path, index=False, engine='openpyxl')
+        print(f"\nSuccessfully created matched headings Excel file: {output_excel_path}")
+    except ImportError:
+         print("\nError: 'openpyxl' library is required to write Excel files.")
+         print("Please install it using: pip install openpyxl")
+    except Exception as e:
+        print(f"\nError saving output Excel file: {e}")
