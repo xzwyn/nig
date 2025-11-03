@@ -1,48 +1,47 @@
-────────────────────────── Traceback (most recent call last) ───────────────────────────
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\e
-  xec_code.py:128 in exec_func_with_error_handling
+def display_results(results_list: list):
+    """Renders the list of evaluation findings in the Streamlit UI."""
+    if not results_list:
+        return
+    st.subheader(f"Found {len(results_list)} noteworthy items")
+    results_list.sort(key=lambda x: x.get('page', 0))
+    
+    # --- MODIFICATION 1: Add enumerate to get a unique index 'i' ---
+    for i, result in enumerate(results_list):
+        error_type = result.get('type', 'Info')
+        with st.container(border=True):
+            st.markdown(f"**Page:** `{result.get('page', 'N/A')}` | **Type:** `{error_type}`")
+            original_phrase, translated_phrase = result.get("original_phrase"), result.get("translated_phrase")
+            
+            if original_phrase or translated_phrase:
+                st.markdown("##### 🔍 Error Focus")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Original English Phrase:**")
+                    st.error(f"'{original_phrase or 'N/A'}'")
+                with col2:
+                    st.markdown("**Translated German Phrase:**")
+                    st.warning(f"'{translated_phrase or 'N/A'}'")
+                st.divider()
 
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\scriptrunner\s
-  cript_runner.py:669 in code_to_exec
-
-  C:\Users\M3ZEDTZ\Downloads\jsons\test_1\app.py:181 in <module>
-
-    178 │   if not st.session_state.evaluation_results:
-    179 │   │   st.success("✅ Analysis complete. No significant errors were found.")
-    180 │   else:
-  ❱ 181 │   │   display_results(st.session_state.evaluation_results)
-    182 else:
-    183 │   st.info("Upload your PDFs, set the start pages, and click 'Run Analysis' t
-    184 
-
-  C:\Users\M3ZEDTZ\Downloads\jsons\test_1\app.py:55 in display_results
-
-     52 │   │   │   │   # Use st.text() or st.code_block() for large text blocks to re
-     53 │   │   │   │   st.text_area("English Section", value=result['english_text'],
-     54 │   │   │   with col2:
-  ❱  55 │   │   │   │   st.text_area("German Section", value=result['german_text'], he
-     56 │   │   │   
-     57 │   │   │   st.markdown(f"**💡 Suggestion:** {result['suggestion']}")
-     58 
-
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\runtime\metrics_util.p
-  y:443 in wrapped_func
-
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\elements\widgets\text_
-  widgets.py:595 in text_area
-
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\elements\widgets\text_
-  widgets.py:642 in _text_area
-
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\elements\lib\utils.py:
-  253 in compute_and_register_element_id
-
-  C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\streamlit\elements\lib\utils.py:
-  150 in _register_element_id
-────────────────────────────────────────────────────────────────────────────────────────
-StreamlitDuplicateElementId: There are multiple `text_area` elements with the same
-auto-generated ID. When this element is created, it is assigned an internal ID based on
-the element type and provided parameters. Multiple elements with the same type and
-parameters will cause this error.
-
-To fix this error, please pass a unique `key` argument to the `text_area` element.
+            st.markdown("##### Full Section Context")
+            col1, col2 = st.columns(2)
+            with col1:
+                # --- MODIFICATION 2: Add a unique key ---
+                st.text_area(
+                    "English Section", 
+                    value=result['english_text'], 
+                    height=200, 
+                    disabled=True, 
+                    key=f"eng_section_{i}"
+                )
+            with col2:
+                # --- MODIFICATION 3: Add a unique key ---
+                st.text_area(
+                    "German Section", 
+                    value=result['german_text'], 
+                    height=200, 
+                    disabled=True, 
+                    key=f"ger_section_{i}"
+                )
+            
+            st.markdown(f"**💡 Suggestion:** {result['suggestion']}")
