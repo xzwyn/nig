@@ -1,1 +1,28 @@
-python main.py "output/your_english_file.json" "output/your_german_file.json" --eng_start_page 3 --ger_start_page 3 --evaluate
+streamlit run app.py
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://192.168.1.2:8501
+
+Connecting to Document Intelligence service for 'en-allianz-se-annual-report-2024.pdf'...
+-> Analysis complete.
+-> Saved raw Markdown output to 'output\doc_intelligence_raw_en-allianz-se-annual-report-2024_20251103_103805.md'
+-> Saved Document Intelligence JSON to 'output\doc_intelligence_en-allianz-se-annual-report-2024_20251103_103805.json'
+Connecting to Document Intelligence service for 'de-allianz-se-geschaeftsbericht-2024.pdf'...
+-> Analysis complete.
+-> Saved raw Markdown output to 'output\doc_intelligence_raw_de-allianz-se-geschaeftsbericht-2024_20251103_103908.md'
+-> Saved Document Intelligence JSON to 'output\doc_intelligence_de-allianz-se-geschaeftsbericht-2024_20251103_103908.json'
+Filtering headings. EN start page: 3, DE start page: 3
+-> Saved raw headings report to 'output\headings_0_raw_en-allianz-se-annual-report-2024_20251103_103730.xlsx'
+Getting embeddings for headings...
+Calculating similarity and running Hungarian algorithm...
+-> Saved matched headings report to 'output\headings_1_matched_en-allianz-se-annual-report-2024_20251103_103730.xlsx'
+Validating 401 matched pairs with LLM...
+Validating Headings: 100%|████████████████████████████████████████████████| 434/434 [03:31<00:00,  2.06it/s] 
+-> Saved validated headings report to 'output\headings_2_validated_en-allianz-se-annual-report-2024_20251103_103730.xlsx'
+Found 378 validated heading pairs.
+Creating content sections from 378 validated heading pairs...
+Created 334 final section pairs for evaluation.
+Evaluating Pairs:   9%|████▋                                               | 30/334 [00:56<07:15,  1.43s/it]evaluate_translation_pair → Error code: 400 - {'error': {'message': "This model's maximum context length is 128000 tokens. However, your messages resulted in 147699 tokens. Please reduce the length of the messages.", 'type': 'invalid_request_error', 'param': 'messages', 'code': 'context_length_exceeded'}}
+Evaluating Pairs: 100%|███████████████████████████████████████████████████| 334/334 [10:12<00:00,  1.83s/it] 
