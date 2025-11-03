@@ -6,40 +6,14 @@ import config
 
 ContentItem = Dict[str, Any]
 
-def _get_page_number(item: Dict[str, Any]) -> int:
-    """Helper to safely get the page number from any item."""
-    if 'boundingRegions' in item and item['boundingRegions']:
-        return item['boundingRegions'][0].get('pageNumber', 0)
-    return 0
-
-def _get_offset(item: Dict[str, Any]) -> int:
-    """Helper to safely get the offset from any item."""
-    if 'spans' in item and item['spans']:
-        return item['spans'][0].get('offset', 0)
-    return 0
-
-def _get_content_from_table(table: Dict[str, Any]) -> str:
-    """
-    Builds a simple string representation of a table.
-    We are using this just for the evaluation; the Markdown is better for debug.
-    For this logic, we just need *some* text.
-    """
-    header = " | ".join([cell.get('content', '') for cell in table.get('header', [])])
-    body = "\n".join([
-        " | ".join([cell.get('content', '') for cell in row.get('cells', [])])
-        for row in table.get('rows', [])
-    ])
-    return f"Table:\n{header}\n{body}"
-
 def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
     """
     MODIFIED (THE FIX):
-    This function now iterates through ALL content lists in the JSON:
-    - paragraphs
-    - tables
-    - lists
-    - footnotes
-    It extracts their content and properties into one single, sorted list.
+    Removed the 'table_offsets' logic that was incorrectly skipping paragraphs,
+    list items, and other content that fell within a table's span.
+    
+    This parser now extracts ALL items from 'paragraphs' and 'tables'
+    and returns a single, offset-sorted list.
     """
     # Allow passing a file path or a preloaded dict
     if isinstance(doc_intelligence_data, (str, Path)):
@@ -48,72 +22,80 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
 
     try:
         analyze_result = doc_intelligence_data['analyzeResult']
+        # We now get the content directly from the items, not the global markdown string
+        raw_paragraphs = analyze_result.get('paragraphs', [])
+        pages = analyze_result.get('pages', [])
+        raw_tables = analyze_result.get('tables', [])
     except KeyError as e:
         raise ValueError(f"Document Intelligence data is missing expected key: {e}") from e
 
+    # --- Step 1: Create a quick lookup for page number by span offset ---
+    # We still need this to associate tables with their page number
+    page_lookup = {}
+    for page in pages:
+        for span in page.get('spans', []):
+            for i in range(span['offset'], span['offset'] + span['length']):
+                page_lookup[i] = page.get('pageNumber', 0)
+
+    # --- Step 2: Extract all content items ---
     all_content: List[ContentItem] = []
 
-    # --- 1. Process PARAGRAPHS ---
-    for p in analyze_result.get('paragraphs', []):
+    # Process PARAGRAPHS (includes sectionHeading, title, listItem, footnote, etc.)
+    for p in raw_paragraphs:
         role = p.get('role', 'paragraph')
-        if role in config.IGNORED_ROLES:
+        if role in config.IGNORED_ROLES or not p.get('spans'):
             continue
+
+        offset = p['spans'][0]['offset']
         
-        all_content.append({
-            'text': p.get('content', ''),
-            'type': role,
-            'page': _get_page_number(p),
-            'offset': _get_offset(p)
-        })
-
-    # --- 2. Process TABLES ---
-    # Tables are complex. We will extract their string content.
-    # Note: The 'content' field for a table in the JSON is just "<table>...</table>".
-    # We can use the 'cells' to build a simpler text version if needed, or just use the content.
-    for t in analyze_result.get('tables', []):
-        all_content.append({
-            'text': t.get('content', _get_content_from_table(t)), # Use content, fallback to manual build
-            'type': 'table',
-            'page': _get_page_number(t),
-            'offset': _get_offset(t)
-        })
-
-    # --- 3. Process LISTS ---
-    for lst in analyze_result.get('lists', []):
-        # We can append the whole list as one item, or each item individually.
-        # Let's add each list item as its own paragraph.
-        for item in lst.get('items', []):
+        # --- BUG FIX ---
+        # The 'if offset in table_offsets:' check has been REMOVED.
+        # We now extract all paragraphs regardless of their position relative to tables.
+        # --- END FIX ---
+        
+        text = p.get('content', '').strip()
+        page_number = page_lookup.get(offset, 0)
+        
+        if text:
             all_content.append({
-                'text': item.get('content', ''),
-                'type': 'listItem',
-                'page': _get_page_number(item),
-                'offset': _get_offset(item)
+                'text': text, 
+                'type': role, 
+                'page': page_number, 
+                'offset': offset
             })
 
-    # --- 4. Process FOOTNOTES ---
-    for fn in analyze_result.get('footnotes', []):
-        all_content.append({
-            'text': fn.get('content', ''),
-            'type': 'footnote',
-            'page': _get_page_number(fn),
-            'offset': _get_offset(fn)
-        })
+    # Process TABLES
+    for table in raw_tables:
+        if not table.get('spans'):
+            continue
         
-    # --- 5. Process all other document elements (as a fallback) ---
-    for doc_elem in analyze_result.get('documents', []):
-         for key, value in doc_elem.get('fields', {}).items():
-            if value and value.get('type') == 'string':
-                 all_content.append({
-                    'text': value.get('content', ''),
-                    'type': key, # e.g., 'documentType'
-                    'page': _get_page_number(value),
-                    'offset': _get_offset(value)
-                })
+        offset = table['spans'][0]['offset']
+        page_number = page_lookup.get(offset, 0)
+        
+        # Extract the pre-formatted <table> content directly from the table object
+        # Note: 'content' is not a standard field on the table object, we use 'cells' to build it.
+        # Let's use the 'spans' to get the content from the *full markdown string*
+        # (Re-reading the client: `output_content_format="markdown"`)
+        
+        # Re-add the full content string
+        full_text_content = analyze_result.get('content', '')
+        if full_text_content:
+            length = table['spans'][0]['length']
+            table_html = full_text_content[offset : offset + length].strip()
+        else:
+            # Fallback if markdown content isn't available
+            table_html = "Table Content (Fallback)"
 
-    # --- Final Step: Sort all extracted content by its character offset ---
+        if table_html:
+            all_content.append({
+                'text': table_html, 
+                'type': 'table', 
+                'page': page_number, 
+                'offset': offset
+            })
+
+    # --- Step 3: Sort all extracted content by its character offset ---
     all_content.sort(key=lambda x: x['offset'])
     
-    # Filter out empty items that might have been added
-    final_content = [item for item in all_content if item['text'] and item['text'].strip()]
-    
-    return final_content
+    # We return the raw, sorted list of ALL items.
+    return all_content
