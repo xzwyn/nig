@@ -6,15 +6,57 @@ import config
 
 ContentItem = Dict[str, Any]
 
+def _get_page_number(item: Dict[str, Any]) -> int:
+    """Helper to safely get the page number from any item."""
+    if 'boundingRegions' in item and item['boundingRegions']:
+        return item['boundingRegions'][0].get('pageNumber', 0)
+    # Fallback for tables which have page number at the top level
+    return item.get('pageNumber', 0)
+
+def _get_offset(item: Dict[str, Any]) -> int:
+    """Helper to safely get the offset from any item."""
+    if 'spans' in item and item['spans']:
+        return item['spans'][0].get('offset', 0)
+    return 0
+
+def _get_content_from_table(table: Dict[str, Any]) -> str:
+    """
+    Builds a simple, readable string representation of a table from its cells.
+    """
+    content = []
+    # Add Header cells if they exist
+    header_cells = table.get('header', {}).get('cells', [])
+    if header_cells:
+        header_row = " | ".join([cell.get('content', '').strip() for cell in header_cells])
+        content.append(header_row)
+        content.append("-" * len(header_row)) # Add a separator
+        
+    # Add Body cells
+    body_rows = table.get('body', {}).get('cells', [])
+    if body_rows:
+         # Need to group cells by row_index
+        rows = {}
+        for cell in body_rows:
+            row_idx = cell.get('rowIndex', 0)
+            if row_idx not in rows:
+                rows[row_idx] = []
+            rows[row_idx].append(cell.get('content', '').strip())
+        
+        for row_idx in sorted(rows.keys()):
+            content.append(" | ".join(rows[row_idx]))
+            
+    return "\n".join(content)
+
 def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
     """
-    MODIFIED (THE REAL FIX):
-    This parser now iterates through ALL content lists in the JSON:
-    - paragraphs (which includes text, list items, footnotes, etc.)
-    - tables
-    - figures (which includes charts, images, and their captions)
-    
-    It extracts all of them into one single, offset-sorted list.
+    MODIFIED (FINAL FIX):
+    This parser now correctly does the following:
+    1. Iterates through 'paragraphs' and 'tables' lists.
+    2. For 'paragraphs', it gets the item's 'role' (e.g., 'paragraph', 'listItem', 'sectionHeading').
+    3. It filters out only the IGNORED_ROLES.
+    4. It uses the item's own 'content' field, which is the correct pre-built string.
+    5. For 'tables', it manually builds the text from 'cells' to get a clean string.
+    6. It combines both lists and sorts by 'offset'.
     """
     # Allow passing a file path or a preloaded dict
     if isinstance(doc_intelligence_data, (str, Path)):
@@ -23,41 +65,25 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
 
     try:
         analyze_result = doc_intelligence_data['analyzeResult']
-        # The full markdown string is the single source of truth
-        full_text_content = analyze_result.get('content', '')
-        if not full_text_content:
-             raise ValueError("Document Intelligence 'content' field is empty.")
-             
         raw_paragraphs = analyze_result.get('paragraphs', [])
         raw_tables = analyze_result.get('tables', [])
-        raw_figures = analyze_result.get('figures', []) # <-- ADDED THIS
-        pages = analyze_result.get('pages', [])
-        
     except KeyError as e:
         raise ValueError(f"Document Intelligence data is missing expected key: {e}") from e
 
-    # --- Step 1: Create a page lookup for all items ---
-    page_lookup = {}
-    for page in pages:
-        for span in page.get('spans', []):
-            for i in range(span['offset'], span['offset'] + span['length']):
-                page_lookup[i] = page.get('pageNumber', 0)
-
-    # --- Step 2: Extract all content items by slicing the main content string ---
     all_content: List[ContentItem] = []
 
-    # Process PARAGRAPHS (includes sectionHeading, title, listItem, footnote, etc.)
+    # --- 1. Process PARAGRAPHS (includes all text roles) ---
     for p in raw_paragraphs:
-        role = p.get('role', 'paragraph')
-        if role in config.IGNORED_ROLES or not p.get('spans'):
-            continue
-
-        span = p['spans'][0]
-        offset = span['offset']
-        length = span['length']
+        # Get the role, default to 'paragraph' if not specified
+        role = p.get('role', 'paragraph') 
         
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
+        # This is the crucial filter:
+        if role in config.IGNORED_ROLES:
+            continue
+            
+        text = p.get('content', '').strip()
+        offset = _get_offset(p)
+        page_number = _get_page_number(p)
         
         if text:
             all_content.append({
@@ -67,18 +93,12 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
                 'offset': offset
             })
 
-    # Process TABLES
+    # --- 2. Process TABLES ---
     for table in raw_tables:
-        if not table.get('spans'):
-            continue
-        
-        span = table['spans'][0]
-        offset = span['offset']
-        length = span['length']
+        text = _get_content_from_table(table)
+        offset = _get_offset(table)
+        page_number = _get_page_number(table)
 
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
-        
         if text:
             all_content.append({
                 'text': text, 
@@ -87,31 +107,7 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
                 'offset': offset
             })
 
-    # --- NEW: Process FIGURES ---
-    for fig in raw_figures:
-        if not fig.get('spans'):
-            continue
-            
-        span = fig['spans'][0]
-        offset = span['offset']
-        length = span['length']
-
-        # The 'content' of a figure in markdown is its caption.
-        # This is perfect, as we want to align the captions.
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
-        
-        if text:
-            all_content.append({
-                'text': text, 
-                'type': 'figure', 
-                'page': page_number, 
-                'offset': offset
-            })
-    # --- END NEW SECTION ---
-
-    # --- Step 3: Sort all extracted content by its character offset ---
+    # --- 3. Sort all extracted content by its character offset ---
     all_content.sort(key=lambda x: x['offset'])
     
-    # We return the raw, sorted list of ALL items.
     return all_content
