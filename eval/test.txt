@@ -9,14 +9,12 @@ ContentItem = Dict[str, Any]
 def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
     """
     MODIFIED (THE REAL FIX):
-    This parser now does one job consistently:
-    1. Gets *all* content elements (paragraphs, tables, etc.).
-    2. Gets the `offset` and `length` of each element.
-    3. Slices the main `analyzeResult.content` (the full markdown string)
-       using that offset and length.
-       
-    This ensures that *all* content, including lists and footnotes
-    (which are part of the 'paragraphs' list), is extracted correctly.
+    This parser now iterates through ALL content lists in the JSON:
+    - paragraphs (which includes text, list items, footnotes, etc.)
+    - tables
+    - figures (which includes charts, images, and their captions)
+    
+    It extracts all of them into one single, offset-sorted list.
     """
     # Allow passing a file path or a preloaded dict
     if isinstance(doc_intelligence_data, (str, Path)):
@@ -31,8 +29,10 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
              raise ValueError("Document Intelligence 'content' field is empty.")
              
         raw_paragraphs = analyze_result.get('paragraphs', [])
-        pages = analyze_result.get('pages', [])
         raw_tables = analyze_result.get('tables', [])
+        raw_figures = analyze_result.get('figures', []) # <-- ADDED THIS
+        pages = analyze_result.get('pages', [])
+        
     except KeyError as e:
         raise ValueError(f"Document Intelligence data is missing expected key: {e}") from e
 
@@ -56,7 +56,6 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
         offset = span['offset']
         length = span['length']
         
-        # FIX: Slice the main content string instead of using p.get('content')
         text = full_text_content[offset : offset + length].strip()
         page_number = page_lookup.get(offset, 0)
         
@@ -77,7 +76,6 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
         offset = span['offset']
         length = span['length']
 
-        # This logic was already correct: slice the main content string
         text = full_text_content[offset : offset + length].strip()
         page_number = page_lookup.get(offset, 0)
         
@@ -88,6 +86,29 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
                 'page': page_number, 
                 'offset': offset
             })
+
+    # --- NEW: Process FIGURES ---
+    for fig in raw_figures:
+        if not fig.get('spans'):
+            continue
+            
+        span = fig['spans'][0]
+        offset = span['offset']
+        length = span['length']
+
+        # The 'content' of a figure in markdown is its caption.
+        # This is perfect, as we want to align the captions.
+        text = full_text_content[offset : offset + length].strip()
+        page_number = page_lookup.get(offset, 0)
+        
+        if text:
+            all_content.append({
+                'text': text, 
+                'type': 'figure', 
+                'page': page_number, 
+                'offset': offset
+            })
+    # --- END NEW SECTION ---
 
     # --- Step 3: Sort all extracted content by its character offset ---
     all_content.sort(key=lambda x: x['offset'])
