@@ -1,4 +1,3 @@
-// src/reporting/excel_writer.py
 import io
 from pathlib import Path
 from typing import List, Dict, Any
@@ -95,6 +94,33 @@ def save_validated_headings_report(
     except Exception as e:
         print(f"Error: Could not write validated headings report to '{filepath}'. Reason: {e}")
 
+# --- NEW: Function to save the final section content pairs ---
+def save_section_content_report(
+    aligned_pairs: List[AlignedPair],
+    filepath: Path
+) -> None:
+    """Saves the final aggregated section content before evaluation."""
+    if not aligned_pairs:
+        return
+        
+    report_data = []
+    for pair in aligned_pairs:
+        eng_item = pair.get('english')
+        ger_item = pair.get('german')
+        report_data.append({
+            "English Section Content": eng_item['text'] if eng_item else "---",
+            "German Section Content": ger_item['text'] if ger_item else "---",
+            "Ref English Page": eng_item['page'] if eng_item else "N/A",
+            "Ref German Page": ger_item['page'] if ger_item else "N/A"
+        })
+    
+    df = pd.DataFrame(report_data)
+    try:
+        df.to_excel(filepath, index=False, engine='openpyxl')
+        print(f"-> Saved final section content report to '{filepath}'")
+    except Exception as e:
+        print(f"Error: Could not write section content report to '{filepath}'. Reason: {e}")
+
 # --- KEPT: Original function for the final evaluation report ---
 def save_evaluation_report(evaluation_results: List[EvaluationFinding], filepath: Path) -> None:
     """Saves the AI evaluation findings to a separate Excel report."""
@@ -167,10 +193,7 @@ def create_excel_report_in_memory(evaluation_results: List[EvaluationFinding]) -
 
     return output_buffer.getvalue()
 
-# --- REMOVED: save_alignment_report (no longer needed) ---
-# --- REMOVED: save_sectionwise_debug_report (replaced by heading reports) ---
 
-// app.py
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -188,13 +211,14 @@ from src.processing.section_parser import create_section_pairs
 from src.evaluation.pipeline import run_evaluation_pipeline
 from src.reporting.excel_writer import (
     create_excel_report_in_memory,
-    save_evaluation_report
+    save_evaluation_report,
+    save_section_content_report  # <-- Import the new function
 )
-# Note: Other alignment/debug reports are saved by the heading_aligner itself
 
-# --- Page Configuration & UI Functions (unchanged from original) ---
+# --- Page Configuration ---
 st.set_page_config(page_title="Translation Evaluator", layout="wide")
 
+# --- Using your provided display_results function ---
 def display_results(results_list: list):
     """Renders the list of evaluation findings in the Streamlit UI."""
     if not results_list:
@@ -243,6 +267,7 @@ def display_results(results_list: list):
             
             st.markdown(f"**💡 Suggestion:** {result['suggestion']}")
 
+
 # --- Main App ---
 st.title("📚 Translation Evaluator")
 st.markdown("This tool aligns and evaluates translated PDF documents using a **Headings-First** structural approach.")
@@ -280,20 +305,18 @@ with st.sidebar:
         try:
             # --- Start New Pipeline ---
             
-            with st.spinner("Step 1/6: Analyzing PDFs with Azure Document Intelligence..."):
+            with st.spinner("Step 1/7: Analyzing PDFs with Azure Document Intelligence..."):
                 eng_pdf_bytes = english_pdf.getvalue()
                 ger_pdf_bytes = german_pdf.getvalue()
                 eng_json_data = analyze_pdf(eng_pdf_bytes, english_pdf.name)
                 ger_json_data = analyze_pdf(ger_pdf_bytes, german_pdf.name)
 
-            with st.spinner("Step 2/6: Processing full document content..."):
-                # This parser is now simpler, just extracts all items
+            with st.spinner("Step 2/7: Processing full document content..."):
                 full_english_content = process_document_json(eng_json_data)
                 full_german_content = process_document_json(ger_json_data)
                 st.toast(f"Extracted {len(full_english_content)} EN segments and {len(full_german_content)} DE segments.")
 
-            with st.spinner("Step 3/6: Matching and validating section headings (Phase 1)..."):
-                # This function now does the alignment AND saves its own debug reports
+            with st.spinner("Step 3/7: Matching and validating section headings (Phase 1)..."):
                 validated_heading_pairs = match_and_validate_headings(
                     full_english_content,
                     full_german_content,
@@ -309,7 +332,7 @@ with st.sidebar:
                     if len(validated_heading_pairs) > 20:
                         st.write(f"...and {len(validated_heading_pairs) - 20} more.")
 
-            with st.spinner("Step 4/6: Creating content pairs from sections (Phase 2)..."):
+            with st.spinner("Step 4/7: Creating content pairs from sections (Phase 2)..."):
                 final_aligned_pairs = create_section_pairs(
                     validated_heading_pairs,
                     full_english_content,
@@ -317,14 +340,20 @@ with st.sidebar:
                 )
                 st.toast(f"Created {len(final_aligned_pairs)} section pairs for evaluation.")
 
-            with st.spinner("Step 5/6: Evaluating aligned sections for errors..."):
+            with st.spinner("Step 5/7: Saving section content debug report..."):
+                if final_aligned_pairs:
+                    content_report_path = output_dir / f"content_pairs_{base_filename}.xlsx"
+                    save_section_content_report(final_aligned_pairs, content_report_path)
+                    st.toast("Saved Section Content Report.")
+
+            with st.spinner("Step 6/7: Evaluating aligned sections for errors..."):
                 if not final_aligned_pairs:
                     st.warning("No content sections were created. Evaluation will be skipped.")
                     st.session_state.evaluation_results = []
                 else:
                     st.session_state.evaluation_results = list(run_evaluation_pipeline(final_aligned_pairs))
 
-            with st.spinner("Step 6/6: Saving final evaluation report..."):
+            with st.spinner("Step 7/7: Saving final evaluation report..."):
                 if st.session_state.evaluation_results:
                     eval_report_path = output_dir / f"evaluation_{base_filename}.xlsx"
                     save_evaluation_report(st.session_state.evaluation_results, eval_report_path)
@@ -368,7 +397,6 @@ elif st.session_state.analysis_complete:
 else:
     st.info("Upload your PDFs, set the start pages, and click 'Run Analysis' to begin.")
 
-// main.py
 import argparse
 import time
 from pathlib import Path
@@ -381,7 +409,10 @@ from src.processing.json_parser import process_document_json
 from src.alignment.heading_aligner import match_and_validate_headings
 from src.processing.section_parser import create_section_pairs
 from src.evaluation.pipeline import run_evaluation_pipeline
-from src.reporting.excel_writer import save_evaluation_report
+from src.reporting.excel_writer import (
+    save_evaluation_report, 
+    save_section_content_report  # <-- Import the new function
+)
 from src.reporting.markdown_writer import save_to_markdown
 
 def main():
@@ -423,17 +454,17 @@ def main():
     try:
         # --- Start New Pipeline ---
 
-        print("Step 1/5: Processing JSON files...")
+        print("Step 1/6: Processing JSON files...")
         full_english_content = process_document_json(eng_path)
         full_german_content = process_document_json(ger_path)
         print(f"-> Extracted {len(full_english_content)} EN segments and {len(full_german_content)} DE segments.\n")
 
-        print("Step 2/5: Creating verification Markdown files...")
+        print("Step 2/6: Creating verification Markdown files...")
         save_to_markdown(full_english_content, output_dir / f"{eng_path.stem}_processed.md")
         save_to_markdown(full_german_content, output_dir / f"{ger_path.stem}_processed.md")
         print(f"-> Markdown files saved in '{output_dir.resolve()}'\n")
 
-        print("Step 3/5: Matching and validating section headings (Phase 1)...")
+        print("Step 3/6: Matching and validating section headings (Phase 1)...")
         # This function saves its own 3 debug reports
         validated_heading_pairs = match_and_validate_headings(
             full_english_content,
@@ -445,7 +476,7 @@ def main():
         )
         print(f"-> Found {len(validated_heading_pairs)} validated heading pairs.\n")
 
-        print("Step 4/5: Creating content pairs from sections (Phase 2)...")
+        print("Step 4/6: Creating content pairs from sections (Phase 2)...")
         final_aligned_pairs = create_section_pairs(
             validated_heading_pairs,
             full_english_content,
@@ -453,8 +484,13 @@ def main():
         )
         print(f"-> Created {len(final_aligned_pairs)} section pairs for evaluation.\n")
 
+        print("Step 5/6: Saving section content debug report...")
+        if final_aligned_pairs:
+            content_report_path = output_dir / f"content_pairs_{base_filename}.xlsx"
+            save_section_content_report(final_aligned_pairs, content_report_path)
+
         if args.evaluate:
-            print("Step 5/5: Running AI evaluation pipeline...")
+            print("Step 6/6: Running AI evaluation pipeline...")
             if not final_aligned_pairs:
                 print("-> No content sections were created. Evaluation will be skipped.")
             else:
@@ -468,7 +504,7 @@ def main():
                     save_evaluation_report(evaluation_results, output_eval_path)
                     print(f"-> Evaluation report saved to: {output_eval_path.resolve()}")
         else:
-            print("Step 5/5: Skipping evaluation as --evaluate flag was not set.")
+            print("Step 6/6: Skipping evaluation as --evaluate flag was not set.")
 
     except FileNotFoundError as e:
         print(f"Error: Input file not found. {e}")
@@ -481,4 +517,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
