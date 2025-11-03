@@ -1,3 +1,32 @@
+// config.py
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+AZURE_EMBEDDING_ENDPOINT = os.getenv("AZURE_EMBEDDING_ENDPOINT")
+AZURE_EMBEDDING_API_KEY = os.getenv("AZURE_EMBEDDING_API_KEY")
+AZURE_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_EMBEDDING_DEPLOYMENT_NAME")
+AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-02-01")
+
+IGNORED_ROLES = {'pageHeader', 'pageFooter', 'pageNumber'}
+STRUCTURAL_ROLES = {'title', 'sectionHeading'}
+
+W_SEMANTIC = 1  # Weight for semantic similarity (cosine score)
+W_TYPE = 0      # Weight for matching content types (e.g., table vs. table)
+W_PROXIMITY = 0 # Weight for relative position in the document
+
+TYPE_MATCH_BONUS = 0.1
+TYPE_MISMATCH_PENALTY = -0.2
+
+SIMILARITY_THRESHOLD = -1.0
+
+MARGIN_SCORE_THRESHOLD = -1.0
+
+
+INPUT_DIR: str = "input"
+OUTPUT_DIR: str = "output"
+
 // src/alignment/semantic_aligner.py
 from typing import List, Dict, Any, Tuple
 from pathlib import Path
@@ -252,86 +281,6 @@ def align_tocs(english_toc: List[ToCItem], german_toc: List[ToCItem]) -> List[Al
     aligned_sections.sort(key=lambda x: x['english']['start_page'])
     return aligned_sections
 
-// src/clients/doc_intelligence_client.py
-import os
-import json
-from datetime import datetime
-from pathlib import Path
-
-from azure.core.credentials import AzureKeyCredential
-from azure.ai.documentintelligence import DocumentIntelligenceClient
-
-import config
-
-def analyze_pdf(pdf_bytes: bytes, original_filename: str) -> dict:
-    endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
-    key = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
-
-    if not endpoint or not key:
-        raise ValueError(
-            "Azure Document Intelligence credentials are not configured. "
-            "Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY in your .env file."
-        )
-
-    print(f"Connecting to Document Intelligence service for '{original_filename}'...")
-    client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
-
-    poller = client.begin_analyze_document(
-        model_id="prebuilt-layout", 
-        body=pdf_bytes, 
-        content_type="application/pdf",
-        output_content_format="markdown"  
-    )
-    
-    result = poller.result()
-    print("-> Analysis complete.")
-
-    # --- Setup output paths ---
-    output_dir = Path(config.OUTPUT_DIR)
-    output_dir.mkdir(exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_name = Path(original_filename).stem
-
-    if result.content:
-        output_md_filename = f"doc_intelligence_raw_{base_name}_{timestamp}.md"
-        output_md_path = output_dir / output_md_filename
-        try:
-            with open(output_md_path, 'w', encoding='utf-8') as f:
-                f.write(result.content)
-            print(f"-> Saved raw Markdown output to '{output_md_path}'")
-        except Exception as e:
-            print(f"Warning: Could not save raw Markdown output. Reason: {e}")
-
-    try:
-        ar_dict = result.as_dict()  # newer SDKs
-    except AttributeError:
-        try:
-            ar_dict = result.to_dict()  # older SDKs
-        except AttributeError:
-            # Manual fallback
-            ar_dict = {
-                "content": getattr(result, "content", ""),
-                "pages": [p.as_dict() if hasattr(p, "as_dict") else (p.to_dict() if hasattr(p, "to_dict") else {}) for p in getattr(result, "pages", [])],
-                "paragraphs": [x.as_dict() if hasattr(x, "as_dict") else (x.to_dict() if hasattr(x, "to_dict") else {}) for x in getattr(result, "paragraphs", [])],
-                "tables": [t.as_dict() if hasattr(t, "as_dict") else (t.to_dict() if hasattr(t, "to_dict") else {}) for t in getattr(result, "tables", [])],
-                "styles": [s.as_dict() if hasattr(s, "as_dict") else (s.to_dict() if hasattr(s, "to_dict") else {}) for s in getattr(result, "styles", [])],
-            }
-
-    result_dict = {"analyzeResult": ar_dict}
-
-    # Save JSON for reference
-    output_filename = f"doc_intelligence_{base_name}_{timestamp}.json"
-    output_path = output_dir / output_filename
-
-    try:
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(result_dict, f, ensure_ascii=False, indent=4)
-        print(f"-> Saved Document Intelligence JSON to '{output_path}'")
-    except Exception as e:
-        print(f"Warning: Could not save JSON output for '{original_filename}'. Reason: {e}")
-
-    return result_dict
-
 // src/clients/azure_client.py
 import os
 from typing import List, Dict, Any, Optional
@@ -427,6 +376,86 @@ def get_embeddings(texts: List[str], model: Optional[str]=None) -> List[List[flo
         model=deployment
     )
     return [item.embedding for item in response.data]
+
+// src/clients/doc_intelligence_client.py
+import os
+import json
+from datetime import datetime
+from pathlib import Path
+
+from azure.core.credentials import AzureKeyCredential
+from azure.ai.documentintelligence import DocumentIntelligenceClient
+
+import config
+
+def analyze_pdf(pdf_bytes: bytes, original_filename: str) -> dict:
+    endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
+    key = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
+
+    if not endpoint or not key:
+        raise ValueError(
+            "Azure Document Intelligence credentials are not configured. "
+            "Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY in your .env file."
+        )
+
+    print(f"Connecting to Document Intelligence service for '{original_filename}'...")
+    client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+
+    poller = client.begin_analyze_document(
+        model_id="prebuilt-layout", 
+        body=pdf_bytes, 
+        content_type="application/pdf",
+        output_content_format="markdown"  
+    )
+    
+    result = poller.result()
+    print("-> Analysis complete.")
+
+    # --- Setup output paths ---
+    output_dir = Path(config.OUTPUT_DIR)
+    output_dir.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_name = Path(original_filename).stem
+
+    if result.content:
+        output_md_filename = f"doc_intelligence_raw_{base_name}_{timestamp}.md"
+        output_md_path = output_dir / output_md_filename
+        try:
+            with open(output_md_path, 'w', encoding='utf-8') as f:
+                f.write(result.content)
+            print(f"-> Saved raw Markdown output to '{output_md_path}'")
+        except Exception as e:
+            print(f"Warning: Could not save raw Markdown output. Reason: {e}")
+
+    try:
+        ar_dict = result.as_dict()  # newer SDKs
+    except AttributeError:
+        try:
+            ar_dict = result.to_dict()  # older SDKs
+        except AttributeError:
+            # Manual fallback
+            ar_dict = {
+                "content": getattr(result, "content", ""),
+                "pages": [p.as_dict() if hasattr(p, "as_dict") else (p.to_dict() if hasattr(p, "to_dict") else {}) for p in getattr(result, "pages", [])],
+                "paragraphs": [x.as_dict() if hasattr(x, "as_dict") else (x.to_dict() if hasattr(x, "to_dict") else {}) for x in getattr(result, "paragraphs", [])],
+                "tables": [t.as_dict() if hasattr(t, "as_dict") else (t.to_dict() if hasattr(t, "to_dict") else {}) for t in getattr(result, "tables", [])],
+                "styles": [s.as_dict() if hasattr(s, "as_dict") else (s.to_dict() if hasattr(s, "to_dict") else {}) for s in getattr(result, "styles", [])],
+            }
+
+    result_dict = {"analyzeResult": ar_dict}
+
+    # Save JSON for reference
+    output_filename = f"doc_intelligence_{base_name}_{timestamp}.json"
+    output_path = output_dir / output_filename
+
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(result_dict, f, ensure_ascii=False, indent=4)
+        print(f"-> Saved Document Intelligence JSON to '{output_path}'")
+    except Exception as e:
+        print(f"Warning: Could not save JSON output for '{original_filename}'. Reason: {e}")
+
+    return result_dict
 
 // src/evaluation/evaluators.py
 import json
@@ -1104,35 +1133,6 @@ def save_to_markdown(content: List[ContentItem], filepath: Path) -> None:
                 f.write(f"## {item['text']}\n\n")
             else:
                 f.write(f"{item['text']}\n\n")
-
-// config.py
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-AZURE_EMBEDDING_ENDPOINT = os.getenv("AZURE_EMBEDDING_ENDPOINT")
-AZURE_EMBEDDING_API_KEY = os.getenv("AZURE_EMBEDDING_API_KEY")
-AZURE_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_EMBEDDING_DEPLOYMENT_NAME")
-AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-02-01")
-
-IGNORED_ROLES = {'pageHeader', 'pageFooter', 'pageNumber'}
-STRUCTURAL_ROLES = {'title', 'sectionHeading'}
-
-W_SEMANTIC = 1  # Weight for semantic similarity (cosine score)
-W_TYPE = 0      # Weight for matching content types (e.g., table vs. table)
-W_PROXIMITY = 0 # Weight for relative position in the document
-
-TYPE_MATCH_BONUS = 0.1
-TYPE_MISMATCH_PENALTY = -0.2
-
-SIMILARITY_THRESHOLD = -1.0
-
-MARGIN_SCORE_THRESHOLD = -1.0
-
-
-INPUT_DIR: str = "input"
-OUTPUT_DIR: str = "output"
 
 // app.py
 from dotenv import load_dotenv
