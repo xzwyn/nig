@@ -6,12 +6,40 @@ import config
 
 ContentItem = Dict[str, Any]
 
+def _get_page_number(item: Dict[str, Any]) -> int:
+    """Helper to safely get the page number from any item."""
+    if 'boundingRegions' in item and item['boundingRegions']:
+        return item['boundingRegions'][0].get('pageNumber', 0)
+    return 0
+
+def _get_offset(item: Dict[str, Any]) -> int:
+    """Helper to safely get the offset from any item."""
+    if 'spans' in item and item['spans']:
+        return item['spans'][0].get('offset', 0)
+    return 0
+
+def _get_content_from_table(table: Dict[str, Any]) -> str:
+    """
+    Builds a simple string representation of a table.
+    We are using this just for the evaluation; the Markdown is better for debug.
+    For this logic, we just need *some* text.
+    """
+    header = " | ".join([cell.get('content', '') for cell in table.get('header', [])])
+    body = "\n".join([
+        " | ".join([cell.get('content', '') for cell in row.get('cells', [])])
+        for row in table.get('rows', [])
+    ])
+    return f"Table:\n{header}\n{body}"
+
 def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
     """
-    MODIFIED: This function now correctly iterates over *all* content types
-    (paragraphs, tables, lists, footnotes) from the Document Intelligence JSON.
-    It uses each item's own 'content' field and sorts them by their
-    character 'offset' to guarantee a complete and correctly ordered list.
+    MODIFIED (THE FIX):
+    This function now iterates through ALL content lists in the JSON:
+    - paragraphs
+    - tables
+    - lists
+    - footnotes
+    It extracts their content and properties into one single, sorted list.
     """
     # Allow passing a file path or a preloaded dict
     if isinstance(doc_intelligence_data, (str, Path)):
@@ -20,125 +48,72 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
 
     try:
         analyze_result = doc_intelligence_data['analyzeResult']
-        
-        # Get all top-level content lists
-        raw_paragraphs = analyze_result.get('paragraphs', [])
-        raw_tables = analyze_result.get('tables', [])
-        raw_lists = analyze_result.get('lists', [])
-        raw_footnotes = analyze_result.get('footnotes', [])
-        
     except KeyError as e:
         raise ValueError(f"Document Intelligence data is missing expected key: {e}") from e
-    except Exception as e:
-        raise ValueError(f"Error parsing initial JSON structure: {e}") from e
-
 
     all_content: List[ContentItem] = []
 
-    # --- Step 1: Process PARAGRAPHS (includes headings, subheadings, text) ---
-    for p in raw_paragraphs:
+    # --- 1. Process PARAGRAPHS ---
+    for p in analyze_result.get('paragraphs', []):
         role = p.get('role', 'paragraph')
-        if role in config.IGNORED_ROLES or not p.get('spans'):
-            continue
-
-        text = p.get('content', '').strip()
-        offset = p['spans'][0]['offset']
-        page = p.get('pageNumber', 0)
-        
-        if text:
-            all_content.append({
-                'text': text, 
-                'type': role, 
-                'page': page, 
-                'offset': offset
-            })
-
-    # --- Step 2: Process TABLES ---
-    # Note: A 'table' object's content is its markdown/HTML representation,
-    # which is exactly what we want for a single block.
-    for t in raw_tables:
-        if not t.get('spans'):
+        if role in config.IGNORED_ROLES:
             continue
         
-        text = t.get('content', '').strip()
-        offset = t['spans'][0]['offset']
-        page = t.get('pageNumber', 0)
+        all_content.append({
+            'text': p.get('content', ''),
+            'type': role,
+            'page': _get_page_number(p),
+            'offset': _get_offset(p)
+        })
+
+    # --- 2. Process TABLES ---
+    # Tables are complex. We will extract their string content.
+    # Note: The 'content' field for a table in the JSON is just "<table>...</table>".
+    # We can use the 'cells' to build a simpler text version if needed, or just use the content.
+    for t in analyze_result.get('tables', []):
+        all_content.append({
+            'text': t.get('content', _get_content_from_table(t)), # Use content, fallback to manual build
+            'type': 'table',
+            'page': _get_page_number(t),
+            'offset': _get_offset(t)
+        })
+
+    # --- 3. Process LISTS ---
+    for lst in analyze_result.get('lists', []):
+        # We can append the whole list as one item, or each item individually.
+        # Let's add each list item as its own paragraph.
+        for item in lst.get('items', []):
+            all_content.append({
+                'text': item.get('content', ''),
+                'type': 'listItem',
+                'page': _get_page_number(item),
+                'offset': _get_offset(item)
+            })
+
+    # --- 4. Process FOOTNOTES ---
+    for fn in analyze_result.get('footnotes', []):
+        all_content.append({
+            'text': fn.get('content', ''),
+            'type': 'footnote',
+            'page': _get_page_number(fn),
+            'offset': _get_offset(fn)
+        })
         
-        if text:
-            all_content.append({
-                'text': text, 
-                'type': 'table', 
-                'page': page, 
-                'offset': offset
-            })
+    # --- 5. Process all other document elements (as a fallback) ---
+    for doc_elem in analyze_result.get('documents', []):
+         for key, value in doc_elem.get('fields', {}).items():
+            if value and value.get('type') == 'string':
+                 all_content.append({
+                    'text': value.get('content', ''),
+                    'type': key, # e.g., 'documentType'
+                    'page': _get_page_number(value),
+                    'offset': _get_offset(value)
+                })
 
-    # --- Step 3: Process LISTS ---
-    for l in raw_lists:
-        if not l.get('spans'):
-            continue
-
-        text = l.get('content', '').strip()
-        offset = l['spans'][0]['offset']
-        page = l.get('pageNumber', 0)
-
-        if text:
-            all_content.append({
-                'text': text,
-                'type': 'listItem', # Use a consistent role
-                'page': page,
-                'offset': offset
-            })
-
-    # --- Step 4: Process FOOTNOTES ---
-    for f in raw_footnotes:
-        if not f.get('spans'):
-            continue
-
-        text = f.get('content', '').strip()
-        offset = f['spans'][0]['offset']
-        page = f.get('pageNumber', 0)
-
-        if text:
-            all_content.append({
-                'text': text,
-                'type': 'footnote',
-                'page': page,
-                'offset': offset
-            })
-
-    # --- Step 5: De-duplicate content ---
-    # The 'paragraphs' list sometimes includes content that is *also* in the
-    # 'tables', 'lists', or 'footnotes' lists. We must de-duplicate.
-    # The 'offset' is the unique key.
-    
-    seen_offsets = set()
-    deduplicated_content = []
-    
-    # We sort by offset first to process in document order
+    # --- Final Step: Sort all extracted content by its character offset ---
     all_content.sort(key=lambda x: x['offset'])
     
-    # We prioritize non-paragraph roles (table, list, footnote)
-    # If a paragraph has the same offset, it's likely a duplicate.
+    # Filter out empty items that might have been added
+    final_content = [item for item in all_content if item['text'] and item['text'].strip()]
     
-    # First, add all special types and their offsets
-    special_offsets = set()
-    for item in all_content:
-        if item['type'] not in ['paragraph', 'title', 'sectionHeading', 'subheading']:
-            if item['offset'] not in seen_offsets:
-                deduplicated_content.append(item)
-                seen_offsets.add(item['offset'])
-                special_offsets.add(item['offset'])
-
-    # Now, add only the paragraphs that don't share an offset
-    for item in all_content:
-        if item['type'] in ['paragraph', 'title', 'sectionHeading', 'subheading']:
-            if item['offset'] not in seen_offsets:
-                deduplicated_content.append(item)
-                seen_offsets.add(item['offset'])
-
-    # --- Step 6: Final Sort ---
-    # Re-sort the de-duplicated list to ensure perfect order
-    deduplicated_content.sort(key=lambda x: x['offset'])
-    
-    print(f"JSON parser captured {len(deduplicated_content)} de-duplicated content items.")
-    return deduplicated_content
+    return final_content
