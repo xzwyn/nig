@@ -1,90 +1,144 @@
-from typing import List, Dict, Any, Tuple
+import json
+from pathlib import Path
+from typing import List, Dict, Any
 
-# Type Alias for clarity
+import config
+
 ContentItem = Dict[str, Any]
-HeadingPair = Tuple[ContentItem, ContentItem]
-AlignedPair = Dict[str, Any] # The final output format for the evaluation pipeline
 
-def _find_content_between(
-    start_item: ContentItem, 
-    end_item: ContentItem, 
-    all_content: List[ContentItem]
-) -> str:
+def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
     """
-    Finds and concatenates all content items between two items,
-    based on their character offsets.
+    MODIFIED: This function now correctly iterates over *all* content types
+    (paragraphs, tables, lists, footnotes) from the Document Intelligence JSON.
+    It uses each item's own 'content' field and sorts them by their
+    character 'offset' to guarantee a complete and correctly ordered list.
     """
-    start_offset = start_item['offset']
-    end_offset = end_item['offset']
-    
-    # We want content *after* the start heading and *before* the end heading
-    content_blocks = [
-        item['text'] for item in all_content
-        if start_offset < item['offset'] < end_offset
-    ]
-    
-    return "\n\n".join(content_blocks)
+    # Allow passing a file path or a preloaded dict
+    if isinstance(doc_intelligence_data, (str, Path)):
+        with open(Path(doc_intelligence_data), 'r', encoding='utf-8') as f:
+            doc_intelligence_data = json.load(f)
 
-def create_section_pairs(
-    validated_heading_pairs: List[HeadingPair],
-    full_english_content: List[ContentItem],
-    full_german_content: List[ContentItem]
-) -> List[AlignedPair]:
-    """
-    Main orchestration function for Phase 2:
-    Uses the validated heading pairs as 'anchors' to extract
-    all content *between* them.
-    """
-    if not validated_heading_pairs:
-        return []
+    try:
+        analyze_result = doc_intelligence_data['analyzeResult']
+        
+        # Get all top-level content lists
+        raw_paragraphs = analyze_result.get('paragraphs', [])
+        raw_tables = analyze_result.get('tables', [])
+        raw_lists = analyze_result.get('lists', [])
+        raw_footnotes = analyze_result.get('footnotes', [])
+        
+    except KeyError as e:
+        raise ValueError(f"Document Intelligence data is missing expected key: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Error parsing initial JSON structure: {e}") from e
 
-    print(f"Creating content sections from {len(validated_heading_pairs)} validated heading pairs...")
-    
-    final_aligned_pairs: List[AlignedPair] = []
-    
-    # Iterate through all consecutive pairs of headings
-    for i in range(len(validated_heading_pairs) - 1):
-        # Current pair (A)
-        eng_heading_A, ger_heading_A = validated_heading_pairs[i]
-        
-        # Next pair (B)
-        eng_heading_B, ger_heading_B = validated_heading_pairs[i+1]
-        
-        # Extract content between A and B for English
-        eng_section_text = _find_content_between(
-            eng_heading_A, 
-            eng_heading_B, 
-            full_english_content
-        )
-        
-        # Extract content between A and B for German
-        ger_section_text = _find_content_between(
-            ger_heading_A, 
-            ger_heading_B, 
-            full_german_content
-        )
-        
-        # --- MODIFICATION ---
-        # The 'if eng_section_text or ger_section_text:' check has been removed.
-        # We now append ALL sections, even if both are empty.
-        
-        final_aligned_pairs.append({
-            "english": {
-                "text": eng_section_text,
-                "type": "section",
-                "page": eng_heading_A['page'] # Use start heading page as reference
-            },
-            "german": {
-                "text": ger_section_text,
-                "type": "section",
-                "page": ger_heading_A['page']
-            },
-            "similarity": 0.0, # Not applicable in this model
-            "margin_score": 0.0 # Not applicable in this model
-        })
 
-    # Note: We currently don't process content *after* the last validated heading.
+    all_content: List[ContentItem] = []
+
+    # --- Step 1: Process PARAGRAPHS (includes headings, subheadings, text) ---
+    for p in raw_paragraphs:
+        role = p.get('role', 'paragraph')
+        if role in config.IGNORED_ROLES or not p.get('spans'):
+            continue
+
+        text = p.get('content', '').strip()
+        offset = p['spans'][0]['offset']
+        page = p.get('pageNumber', 0)
+        
+        if text:
+            all_content.append({
+                'text': text, 
+                'type': role, 
+                'page': page, 
+                'offset': offset
+            })
+
+    # --- Step 2: Process TABLES ---
+    # Note: A 'table' object's content is its markdown/HTML representation,
+    # which is exactly what we want for a single block.
+    for t in raw_tables:
+        if not t.get('spans'):
+            continue
+        
+        text = t.get('content', '').strip()
+        offset = t['spans'][0]['offset']
+        page = t.get('pageNumber', 0)
+        
+        if text:
+            all_content.append({
+                'text': text, 
+                'type': 'table', 
+                'page': page, 
+                'offset': offset
+            })
+
+    # --- Step 3: Process LISTS ---
+    for l in raw_lists:
+        if not l.get('spans'):
+            continue
+
+        text = l.get('content', '').strip()
+        offset = l['spans'][0]['offset']
+        page = l.get('pageNumber', 0)
+
+        if text:
+            all_content.append({
+                'text': text,
+                'type': 'listItem', # Use a consistent role
+                'page': page,
+                'offset': offset
+            })
+
+    # --- Step 4: Process FOOTNOTES ---
+    for f in raw_footnotes:
+        if not f.get('spans'):
+            continue
+
+        text = f.get('content', '').strip()
+        offset = f['spans'][0]['offset']
+        page = f.get('pageNumber', 0)
+
+        if text:
+            all_content.append({
+                'text': text,
+                'type': 'footnote',
+                'page': page,
+                'offset': offset
+            })
+
+    # --- Step 5: De-duplicate content ---
+    # The 'paragraphs' list sometimes includes content that is *also* in the
+    # 'tables', 'lists', or 'footnotes' lists. We must de-duplicate.
+    # The 'offset' is the unique key.
     
-    # This number should now be (len(validated_heading_pairs) - 1)
-    print(f"Created {len(final_aligned_pairs)} final section pairs for evaluation.")
-    return final_aligned_pairs
+    seen_offsets = set()
+    deduplicated_content = []
+    
+    # We sort by offset first to process in document order
+    all_content.sort(key=lambda x: x['offset'])
+    
+    # We prioritize non-paragraph roles (table, list, footnote)
+    # If a paragraph has the same offset, it's likely a duplicate.
+    
+    # First, add all special types and their offsets
+    special_offsets = set()
+    for item in all_content:
+        if item['type'] not in ['paragraph', 'title', 'sectionHeading', 'subheading']:
+            if item['offset'] not in seen_offsets:
+                deduplicated_content.append(item)
+                seen_offsets.add(item['offset'])
+                special_offsets.add(item['offset'])
+
+    # Now, add only the paragraphs that don't share an offset
+    for item in all_content:
+        if item['type'] in ['paragraph', 'title', 'sectionHeading', 'subheading']:
+            if item['offset'] not in seen_offsets:
+                deduplicated_content.append(item)
+                seen_offsets.add(item['offset'])
+
+    # --- Step 6: Final Sort ---
+    # Re-sort the de-duplicated list to ensure perfect order
+    deduplicated_content.sort(key=lambda x: x['offset'])
+    
+    print(f"JSON parser captured {len(deduplicated_content)} de-duplicated content items.")
+    return deduplicated_content
