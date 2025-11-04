@@ -8,16 +8,16 @@ ContentItem = Dict[str, Any]
 
 def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
     """
-    MODIFIED (THE REAL FIX):
-    This parser now iterates through ALL content lists in the JSON:
+    MODIFIED (FINAL FIX):
+    This parser now iterates through ALL FOUR content lists in the JSON:
     - paragraphs (which includes text, list items, footnotes, etc.)
     - tables
     - figures (which includes charts, images, and their captions)
     - sections (which includes other document segments)
     
     It extracts all of them into one single, offset-sorted list
-    by slicing the main 'content' string, which is the only
-    reliable source of truth for all element types.
+    by slicing the main 'content' string. A set is used to
+    prevent duplicate entries.
     """
     # Allow passing a file path or a preloaded dict
     if isinstance(doc_intelligence_data, (str, Path)):
@@ -34,7 +34,7 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
         raw_paragraphs = analyze_result.get('paragraphs', [])
         raw_tables = analyze_result.get('tables', [])
         raw_figures = analyze_result.get('figures', [])
-        raw_sections = analyze_result.get('sections', []) # <-- ADDED THIS
+        raw_sections = analyze_result.get('sections', [])
         pages = analyze_result.get('pages', [])
         
     except KeyError as e:
@@ -51,108 +51,45 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
     all_content: List[ContentItem] = []
     
     # Set to store offsets we've already added to prevent duplication
-    # (e.g., a "section" that is also a "paragraph")
     added_offsets = set()
 
-    # Process PARAGRAPHS (includes sectionHeading, title, listItem, footnote, etc.)
-    for p in raw_paragraphs:
-        role = p.get('role', 'paragraph')
-        if role in config.IGNORED_ROLES or not p.get('spans'):
-            continue
-
-        span = p['spans'][0]
-        offset = span['offset']
-        length = span['length']
-        
-        if offset in added_offsets:
-            continue
+    # Create a helper to process items from any list
+    def add_item(item_list, default_role):
+        for item in item_list:
+            if not item.get('spans'):
+                continue
             
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
-        
-        if text:
-            all_content.append({
-                'text': text, 
-                'type': role, 
-                'page': page_number, 
-                'offset': offset
-            })
-            added_offsets.add(offset)
-
-    # Process TABLES
-    for table in raw_tables:
-        if not table.get('spans'):
-            continue
-        
-        span = table['spans'][0]
-        offset = span['offset']
-        length = span['length']
-
-        if offset in added_offsets:
-            continue
-
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
-        
-        if text:
-            all_content.append({
-                'text': text, 
-                'type': 'table', 
-                'page': page_number, 
-                'offset': offset
-            })
-            added_offsets.add(offset)
-
-    # Process FIGURES
-    for fig in raw_figures:
-        if not fig.get('spans'):
-            continue
+            span = item['spans'][0]
+            offset = span['offset']
+            length = span['length']
             
-        span = fig['spans'][0]
-        offset = span['offset']
-        length = span['length']
+            # Skip if we've already added this exact item
+            if offset in added_offsets:
+                continue
 
-        if offset in added_offsets:
-            continue
+            # Get role, with fallbacks for different item types
+            role = item.get('role', item.get('kind', default_role))
 
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
-        
-        if text:
-            all_content.append({
-                'text': text, 
-                'type': 'figure', 
-                'page': page_number, 
-                'offset': offset
-            })
-            added_offsets.add(offset)
+            if role in config.IGNORED_ROLES:
+                continue
 
-    # --- NEW: Process SECTIONS ---
-    for sec in raw_sections:
-        # Sections often contain other elements; we only want to add them
-        # if they haven't been captured as a paragraph, table, or figure.
-        if not sec.get('spans'):
-            continue
+            text = full_text_content[offset : offset + length].strip()
+            page_number = page_lookup.get(offset, 0)
             
-        span = sec['spans'][0]
-        offset = span['offset']
-        length = span['length']
-        
-        if offset in added_offsets:
-            continue
-            
-        text = full_text_content[offset : offset + length].strip()
-        page_number = page_lookup.get(offset, 0)
-        
-        if text:
-            all_content.append({
-                'text': text, 
-                'type': sec.get('kind', 'section'), # 'kind' is the role for sections
-                'page': page_number, 
-                'offset': offset
-            })
-            added_offsets.add(offset)
-    # --- END NEW SECTION ---
+            if text:
+                all_content.append({
+                    'text': text, 
+                    'type': role, 
+                    'page': page_number, 
+                    'offset': offset
+                })
+                added_offsets.add(offset)
+
+    # --- Process all content lists ---
+    add_item(raw_paragraphs, 'paragraph')
+    add_item(raw_tables, 'table')
+    add_item(raw_figures, 'figure')
+    add_item(raw_sections, 'section')
 
     # --- Step 3: Sort all extracted content by its character offset ---
     all_content.sort(key=lambda x: x['offset'])
