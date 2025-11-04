@@ -1,32 +1,30 @@
 import json
+import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Any
 
-import config
+# --- CONFIGURATION ---
+# These are the files you have provided.
+# Make sure they are in the correct relative paths.
 
+# The JSON file from Document Intelligence
+JSON_PATH = "doc_intelligence_en-allianz-se-annual-report-2024_20251103_103805.json"
+
+# The CSV file of validated headings
+HEADINGS_CSV_PATH = "headings_2_validated_en-allianz-se-annual-report-2024_20251103_103730.xlsx - Sheet1.csv"
+
+# The page numbers we want to investigate
+PAGES_TO_DEBUG = {92, 93, 95}
+
+# --- 1. RE-IMPLEMENTATION OF JSON PARSER ---
+# This is the last version of the parser logic, which is likely correct.
+
+IGNORED_ROLES = {'pageHeader', 'pageFooter', 'pageNumber'}
 ContentItem = Dict[str, Any]
 
-def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
-    """
-    MODIFIED (FINAL FIX):
-    This parser now iterates through ALL FOUR content lists in the JSON:
-    - paragraphs (which includes text, list items, footnotes, etc.)
-    - tables
-    - figures (which includes charts, images, and their captions)
-    - sections (which includes other document segments)
-    
-    It extracts all of them into one single, offset-sorted list
-    by slicing the main 'content' string. A set is used to
-    prevent duplicate entries.
-    """
-    # Allow passing a file path or a preloaded dict
-    if isinstance(doc_intelligence_data, (str, Path)):
-        with open(Path(doc_intelligence_data), 'r', encoding='utf-8') as f:
-            doc_intelligence_data = json.load(f)
-
+def process_document_json(doc_intelligence_data: Any) -> (List[ContentItem], str):
     try:
         analyze_result = doc_intelligence_data['analyzeResult']
-        # The full markdown string is the single source of truth
         full_text_content = analyze_result.get('content', '')
         if not full_text_content:
              raise ValueError("Document Intelligence 'content' field is empty.")
@@ -36,24 +34,18 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
         raw_figures = analyze_result.get('figures', [])
         raw_sections = analyze_result.get('sections', [])
         pages = analyze_result.get('pages', [])
-        
     except KeyError as e:
-        raise ValueError(f"Document Intelligence data is missing expected key: {e}") from e
+        raise ValueError(f"Data is missing expected key: {e}") from e
 
-    # --- Step 1: Create a page lookup for all items ---
     page_lookup = {}
     for page in pages:
         for span in page.get('spans', []):
             for i in range(span['offset'], span['offset'] + span['length']):
                 page_lookup[i] = page.get('pageNumber', 0)
 
-    # --- Step 2: Extract all content items by slicing the main content string ---
     all_content: List[ContentItem] = []
-    
-    # Set to store offsets we've already added to prevent duplication
     added_offsets = set()
 
-    # Create a helper to process items from any list
     def add_item(item_list, default_role):
         for item in item_list:
             if not item.get('spans'):
@@ -63,14 +55,12 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
             offset = span['offset']
             length = span['length']
             
-            # Skip if we've already added this exact item
             if offset in added_offsets:
                 continue
 
-            # Get role, with fallbacks for different item types
             role = item.get('role', item.get('kind', default_role))
 
-            if role in config.IGNORED_ROLES:
+            if role in IGNORED_ROLES:
                 continue
 
             text = full_text_content[offset : offset + length].strip()
@@ -85,13 +75,151 @@ def process_document_json(doc_intelligence_data: Any) -> List[ContentItem]:
                 })
                 added_offsets.add(offset)
 
-    # --- Process all content lists ---
     add_item(raw_paragraphs, 'paragraph')
     add_item(raw_tables, 'table')
     add_item(raw_figures, 'figure')
     add_item(raw_sections, 'section')
 
-    # --- Step 3: Sort all extracted content by its character offset ---
     all_content.sort(key=lambda x: x['offset'])
     
-    return all_content
+    print(f"[DEBUG] json_parser.py: Extracted {len(all_content)} total content items.")
+    return all_content, full_text_content
+
+# --- 2. RE-IMPLEMENTATION OF SECTION PARSER (WITH DEBUGGING) ---
+
+def _find_content_between(
+    start_item: ContentItem, 
+    end_item: ContentItem, 
+    all_content: List[ContentItem],
+    full_text_content: str
+):
+    """
+    Finds and concatenates all content items between two items,
+    based on their character offsets.
+    """
+    start_offset = start_item['offset']
+    end_offset = end_item['offset']
+    
+    # This is the core logic. We find all items from the *full* list
+    # that fall between our two headings.
+    content_items_found = [
+        item for item in all_content
+        if start_offset < item['offset'] < end_offset
+    ]
+    
+    # --- DETAILED DEBUGGING FOR BLANK SECTIONS ---
+    if start_item['page'] in PAGES_TO_DEBUG:
+        print("\n" + "="*80)
+        print(f"DEBUGGING PAGE: {start_item['page']}")
+        print(f"  Start Heading: '{start_item['text'][:50]}...' (Offset: {start_offset}, Page: {start_item['page']})")
+        print(f"  End Heading:   '{end_item['text'][:50]}...' (Offset: {end_offset}, Page: {end_item['page']})")
+        
+        # This is the critical test.
+        # We will check if any *un-validated* headings exist in this gap.
+        all_headings_in_gap = [
+            item for item in content_items_found 
+            if item['type'] in {'sectionHeading', 'title'}
+        ]
+        
+        if not content_items_found:
+            print("  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.")
+            
+            # Let's check the raw markdown string
+            raw_text_between = full_text_content[start_offset + len(start_item['text']):end_offset].strip()
+            if raw_text_between:
+                 print(f"  [RAW TEXT FOUND] '{raw_text_between[:100]}...'")
+                 print("  [CONCLUSION] The json_parser IS failing. It's not extracting items that exist in the raw text.")
+            else:
+                 print("  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.")
+                 print("  [CONCLUSION] The headings are back-to-back. The section is truly empty.")
+                 
+        elif all_headings_in_gap:
+            print(f"  [FLAW IDENTIFIED?] Found {len(all_headings_in_gap)} other headings in this gap:")
+            for h in all_headings_in_gap:
+                print(f"    - (Page {h['page']}) {h['text'][:70]}...")
+            print("  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,")
+            print("  so section_parser.py is skipping over them and creating a giant, incorrect section.")
+            
+        else:
+            print(f"  [INFO] Found {len(content_items_found)} valid content items (paragraphs, lists, etc.).")
+            print("  [CONCLUSION] This section should NOT be blank. The flaw is somewhere else.")
+        
+        print("="*80 + "\n")
+        
+    content_blocks = [item['text'] for item in content_items_found]
+    return "\n\n".join(content_blocks)
+
+# --- 3. MAIN DEBUG RUNNER ---
+def run_debug():
+    print("--- STARTING DEBUG RUN ---")
+    
+    # --- Load JSON ---
+    try:
+        with open(JSON_PATH, 'r', encoding='utf-8') as f:
+            doc_data = json.load(f)
+        print(f"Successfully loaded JSON: {JSON_PATH}")
+    except Exception as e:
+        print(f"FATAL: Could not load JSON file. {e}")
+        return
+
+    # --- Load Validated Headings CSV ---
+    try:
+        headings_df = pd.read_csv(HEADINGS_CSV_PATH)
+        validated_df = headings_df[headings_df['LLM_Validated'] == True]
+        print(f"Successfully loaded CSV: {HEADINGS_CSV_PATH}")
+        print(f"Found {len(validated_df)} validated headings to process.")
+    except Exception as e:
+        print(f"FATAL: Could not load Headings CSV file. {e}")
+        return
+
+    # --- Run JSON Parser ---
+    all_content_items, full_text_content = process_document_json(doc_data)
+    
+    # We must rebuild the `validated_heading_pairs` list
+    # This requires matching the CSV rows back to the full content items
+    
+    # Create a lookup of all content items by (page, text)
+    content_lookup = {}
+    for item in all_content_items:
+        key = (item['page'], item['text'])
+        content_lookup[key] = item
+
+    # Create the list of (eng_item, ger_item) tuples
+    # Note: This debug will only work for the ENGLISH side
+    validated_eng_headings = []
+    for _, row in validated_df.iterrows():
+        key = (row['English Page'], row['English Heading'])
+        if key in content_lookup:
+            validated_eng_headings.append(content_lookup[key])
+        else:
+            # This check is important!
+            # print(f"Warning: Could not find validated heading in all_content: {key}")
+            pass
+            
+    # Sort by offset, just like the real script
+    validated_eng_headings.sort(key=lambda x: x['offset'])
+    
+    print(f"\n--- Running Section Parser Logic for {len(validated_eng_headings)} English Headings ---")
+
+    # --- Run Section Parser ---
+    total_blank_sections = 0
+    for i in range(len(validated_eng_headings) - 1):
+        start_heading = validated_eng_headings[i]
+        end_heading = validated_eng_headings[i+1]
+        
+        section_text = _find_content_between(
+            start_heading, 
+            end_heading, 
+            all_content_items,
+            full_text_content
+        )
+        
+        if not section_text:
+            total_blank_sections += 1
+
+    print(f"\n--- DEBUG RUN COMPLETE ---")
+    print(f"Total Blank Sections Found: {total_blank_sections}")
+    print("Review the 'DEBUGGING PAGE' output above to find the flaw.")
+
+if __name__ == "__main__":
+    run_debug()
