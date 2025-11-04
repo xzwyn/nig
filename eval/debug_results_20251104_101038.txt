@@ -1,0 +1,3316 @@
+--- STARTING DEBUG RUN ---
+Timestamp: 2025-11-04 10:10:38
+Debugging pages: 3 to 115
+Output file: output/debug_results_20251104_101038.txt
+
+Successfully loaded JSON: output/doc_intelligence_en-allianz-se-annual-report-2024_20251103_103805.json
+Successfully loaded Excel file: output/headings_2_validated_doc_intelligence_en-allianz-se-annual-report-2024_20251103_103805_20251104_095415.xlsx
+Found 381 validated headings to process.
+
+[DEBUG] json_parser.py: Extracted 9933 total content items.
+--- Running Section Parser Logic for 381 English Headings ---
+
+
+================================================================================
+DEBUGGING PAGE: 3
+  Start Heading: '## TO OUR INVESTORS...' (Offset: 1767, Page: 3)
+  End Heading:   '## SUPERVISORY BOARD REPORT...' (Offset: 1957, Page: 4)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 4
+  Start Heading: '## SUPERVISORY BOARD REPORT...' (Offset: 1957, Page: 4)
+  End Heading:   '### Ladies and Gentlemen,...' (Offset: 1987, Page: 4)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 4
+  Start Heading: '### Ladies and Gentlemen,...' (Offset: 1987, Page: 4)
+  End Heading:   '### Overview...' (Offset: 2441, Page: 4)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 4
+  Start Heading: '### Overview...' (Offset: 2441, Page: 4)
+  End Heading:   '#### Issues discussed in the Supervisory Board ple...' (Offset: 6437, Page: 4)
+  [INFO] Found 6 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 4
+  Start Heading: '#### Issues discussed in the Supervisory Board ple...' (Offset: 6437, Page: 4)
+  End Heading:   '### Declaration of Conformity with the German Corp...' (Offset: 17083, Page: 6)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 6
+  Start Heading: '### Declaration of Conformity with the German Corp...' (Offset: 17083, Page: 6)
+  End Heading:   '#### Committee activities...' (Offset: 17812, Page: 6)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 6
+  Start Heading: '#### Committee activities...' (Offset: 17812, Page: 6)
+  End Heading:   '## Overview of members' participation in Superviso...' (Offset: 31806, Page: 8)
+  [INFO] Found 19 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 8
+  Start Heading: '## Overview of members' participation in Superviso...' (Offset: 31806, Page: 8)
+  End Heading:   '### Disclosure of members' participation in meetin...' (Offset: 31917, Page: 8)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 8
+  Start Heading: '### Disclosure of members' participation in meetin...' (Offset: 31917, Page: 8)
+  End Heading:   '## Audit of annual accounts and consolidated finan...' (Offset: 36230, Page: 8)
+  [INFO] Found 176 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 8
+  Start Heading: '## Audit of annual accounts and consolidated finan...' (Offset: 36230, Page: 8)
+  End Heading:   '## Members of the Supervisory Board and Board of M...' (Offset: 40036, Page: 9)
+  [INFO] Found 7 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 9
+  Start Heading: '## Members of the Supervisory Board and Board of M...' (Offset: 40036, Page: 9)
+  End Heading:   '# MANDATES OF THE MEMBERS OF THE SUPERVISORY BOARD...' (Offset: 41446, Page: 10)
+  [INFO] Found 6 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 10
+  Start Heading: '# MANDATES OF THE MEMBERS OF THE SUPERVISORY BOARD...' (Offset: 41446, Page: 10)
+  End Heading:   '## Gabriele Burkhardt-Berg...' (Offset: 41705, Page: 10)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 10) ## Michael Diekmann...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 10
+  Start Heading: '## Gabriele Burkhardt-Berg...' (Offset: 41705, Page: 10)
+  End Heading:   '## Dr. Jörg Schneider...' (Offset: 42014, Page: 10)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 10) ## Herbert Hainer...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 10
+  Start Heading: '## Dr. Jörg Schneider...' (Offset: 42014, Page: 10)
+  End Heading:   '## Sophie Boissard...' (Offset: 42310, Page: 10)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 10
+  Start Heading: '## Sophie Boissard...' (Offset: 42310, Page: 10)
+  End Heading:   '# MANDATES OF THE MEMBERS OF THE BOARD OF MANAGEME...' (Offset: 44878, Page: 11)
+  [INFO] Found 21 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 11
+  Start Heading: '# MANDATES OF THE MEMBERS OF THE BOARD OF MANAGEME...' (Offset: 44878, Page: 11)
+  End Heading:   '## Claire-Marie Coste-Lepoutre...' (Offset: 45327, Page: 11)
+  [FLAW IDENTIFIED?] Found 2 other headings in this gap:
+    - (Page 11) ## Oliver Bäte...
+    - (Page 11) ## Sirma Boshnakova...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 11
+  Start Heading: '## Claire-Marie Coste-Lepoutre...' (Offset: 45327, Page: 11)
+  End Heading:   '## Dr. Barbara Karuth-Zelle...' (Offset: 45405, Page: 11)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 11
+  Start Heading: '## Dr. Barbara Karuth-Zelle...' (Offset: 45405, Page: 11)
+  End Heading:   '# MANAGEMENT REPORT OF ALLIANZ SE...' (Offset: 48077, Page: 12)
+  [INFO] Found 25 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 12
+  Start Heading: '# MANAGEMENT REPORT OF ALLIANZ SE...' (Offset: 48077, Page: 12)
+  End Heading:   '## EXECUTIVE SUMMARY AND OUTLOOK...' (Offset: 48296, Page: 13)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 13
+  Start Heading: '## EXECUTIVE SUMMARY AND OUTLOOK...' (Offset: 48296, Page: 13)
+  End Heading:   '### Nature of operations and basis of preparation...' (Offset: 48331, Page: 13)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 13
+  Start Heading: '### Nature of operations and basis of preparation...' (Offset: 48331, Page: 13)
+  End Heading:   '#### Nature of operations...' (Offset: 48383, Page: 13)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 13
+  Start Heading: '#### Nature of operations...' (Offset: 48383, Page: 13)
+  End Heading:   '#### Basis of preparation...' (Offset: 48828, Page: 13)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 13
+  Start Heading: '#### Basis of preparation...' (Offset: 48828, Page: 13)
+  End Heading:   '### Earnings summary...' (Offset: 49308, Page: 13)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 13
+  Start Heading: '### Earnings summary...' (Offset: 49308, Page: 13)
+  End Heading:   '#### € mn...' (Offset: 49365, Page: 13)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 13) #### Condensed income statement...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 13
+  Start Heading: '#### € mn...' (Offset: 49365, Page: 13)
+  End Heading:   '### Taxes and net income...' (Offset: 57972, Page: 14)
+  [FLAW IDENTIFIED?] Found 5 other headings in this gap:
+    - (Page 13) ### Net underwriting result...
+    - (Page 13) ### Net technical result...
+    - (Page 14) ### Non-technical result...
+    - (Page 14) #### Investment result...
+    - (Page 14) ### Other non-technical result...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 14
+  Start Heading: '### Taxes and net income...' (Offset: 57972, Page: 14)
+  End Heading:   '## Economic outlook1...' (Offset: 58811, Page: 15)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 15
+  Start Heading: '## Economic outlook1...' (Offset: 58811, Page: 15)
+  End Heading:   '## Insurance industry outlook...' (Offset: 59607, Page: 15)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 15
+  Start Heading: '## Insurance industry outlook...' (Offset: 59607, Page: 15)
+  End Heading:   '## Business outlook...' (Offset: 60732, Page: 15)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 15
+  Start Heading: '## Business outlook...' (Offset: 60732, Page: 15)
+  End Heading:   '## Management's overall assessment of the current ...' (Offset: 66056, Page: 16)
+  [INFO] Found 15 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 16
+  Start Heading: '## Management's overall assessment of the current ...' (Offset: 66056, Page: 16)
+  End Heading:   '## Cautionary note regarding forward- looking stat...' (Offset: 66444, Page: 16)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 16
+  Start Heading: '## Cautionary note regarding forward- looking stat...' (Offset: 66444, Page: 16)
+  End Heading:   '## No duty to update...' (Offset: 68045, Page: 16)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 16
+  Start Heading: '## No duty to update...' (Offset: 68045, Page: 16)
+  End Heading:   '# OPERATIONS BY REINSURANCE LINES OF BUSINESS...' (Offset: 68391, Page: 17)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 17
+  Start Heading: '# OPERATIONS BY REINSURANCE LINES OF BUSINESS...' (Offset: 68391, Page: 17)
+  End Heading:   '## Gross premiums written and net technical result...' (Offset: 68753, Page: 17)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 17
+  Start Heading: '## Gross premiums written and net technical result...' (Offset: 68753, Page: 17)
+  End Heading:   '## BALANCE SHEET REVIEW...' (Offset: 77520, Page: 19)
+  [INFO] Found 169 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 19
+  Start Heading: '## BALANCE SHEET REVIEW...' (Offset: 77520, Page: 19)
+  End Heading:   '### Condensed balance sheet...' (Offset: 77546, Page: 19)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 19
+  Start Heading: '### Condensed balance sheet...' (Offset: 77546, Page: 19)
+  End Heading:   '#### € mn...' (Offset: 77576, Page: 19)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 19
+  Start Heading: '#### € mn...' (Offset: 77576, Page: 19)
+  End Heading:   '## Investments...' (Offset: 78866, Page: 19)
+  [INFO] Found 51 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 19
+  Start Heading: '## Investments...' (Offset: 78866, Page: 19)
+  End Heading:   '### The book value of investments in affiliated en...' (Offset: 79409, Page: 19)
+  [INFO] Found 20 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 19
+  Start Heading: '### The book value of investments in affiliated en...' (Offset: 79409, Page: 19)
+  End Heading:   '## Receivables...' (Offset: 80821, Page: 19)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 19
+  Start Heading: '## Receivables...' (Offset: 80821, Page: 19)
+  End Heading:   '## Shareholders' equity...' (Offset: 81185, Page: 19)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 19
+  Start Heading: '## Shareholders' equity...' (Offset: 81185, Page: 19)
+  End Heading:   '### Development of shareholders' equity and of iss...' (Offset: 82439, Page: 20)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 20
+  Start Heading: '### Development of shareholders' equity and of iss...' (Offset: 82439, Page: 20)
+  End Heading:   '## Insurance reserves and other provisions...' (Offset: 84003, Page: 20)
+  [INFO] Found 71 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 20
+  Start Heading: '## Insurance reserves and other provisions...' (Offset: 84003, Page: 20)
+  End Heading:   '## Financial liabilities...' (Offset: 84332, Page: 20)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 20
+  Start Heading: '## Financial liabilities...' (Offset: 84332, Page: 20)
+  End Heading:   '### Financial liabilities € mn...' (Offset: 84436, Page: 20)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 20
+  Start Heading: '### Financial liabilities € mn...' (Offset: 84436, Page: 20)
+  End Heading:   '## LIQUIDITY AND FUNDING RESOURCES...' (Offset: 87167, Page: 21)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 20) ### Other intra-group financial liabilities € mn...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 21
+  Start Heading: '## LIQUIDITY AND FUNDING RESOURCES...' (Offset: 87167, Page: 21)
+  End Heading:   '### Liquidity resources and uses...' (Offset: 87512, Page: 21)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 21
+  Start Heading: '### Liquidity resources and uses...' (Offset: 87512, Page: 21)
+  End Heading:   '### Funding sources...' (Offset: 88208, Page: 21)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 21
+  Start Heading: '### Funding sources...' (Offset: 88208, Page: 21)
+  End Heading:   '### Share capital...' (Offset: 88670, Page: 21)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 21
+  Start Heading: '### Share capital...' (Offset: 88670, Page: 21)
+  End Heading:   '### Debt funding...' (Offset: 89803, Page: 21)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 21) #### Capital authorizations of Allianz SE...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 21
+  Start Heading: '### Debt funding...' (Offset: 89803, Page: 21)
+  End Heading:   '## RISK AND OPPORTUNITY REPORT...' (Offset: 90967, Page: 22)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 22
+  Start Heading: '## RISK AND OPPORTUNITY REPORT...' (Offset: 90967, Page: 22)
+  End Heading:   '### Target and strategy of risk and capital manage...' (Offset: 91000, Page: 22)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 22
+  Start Heading: '### Target and strategy of risk and capital manage...' (Offset: 91000, Page: 22)
+  End Heading:   '### Risk management framework and internal control...' (Offset: 94507, Page: 22)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 22
+  Start Heading: '### Risk management framework and internal control...' (Offset: 94507, Page: 22)
+  End Heading:   '#### Risk management framework...' (Offset: 94567, Page: 22)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 22
+  Start Heading: '#### Risk management framework...' (Offset: 94567, Page: 22)
+  End Heading:   '### Internal Control System...' (Offset: 97490, Page: 23)
+  [INFO] Found 10 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 23
+  Start Heading: '### Internal Control System...' (Offset: 97490, Page: 23)
+  End Heading:   '### Risk and Control System for financial and non-...' (Offset: 99557, Page: 23)
+  [INFO] Found 8 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 23
+  Start Heading: '### Risk and Control System for financial and non-...' (Offset: 99557, Page: 23)
+  End Heading:   '### Accounting processes...' (Offset: 99880, Page: 23)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 23
+  Start Heading: '### Accounting processes...' (Offset: 99880, Page: 23)
+  End Heading:   '### Control system for financial and non-financial...' (Offset: 100151, Page: 23)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 23
+  Start Heading: '### Control system for financial and non-financial...' (Offset: 100151, Page: 23)
+  End Heading:   '### Our risk strategy...' (Offset: 100515, Page: 23)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 23
+  Start Heading: '### Our risk strategy...' (Offset: 100515, Page: 23)
+  End Heading:   '### Opportunities...' (Offset: 101036, Page: 23)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 23
+  Start Heading: '### Opportunities...' (Offset: 101036, Page: 23)
+  End Heading:   '## Risk governance structure...' (Offset: 103342, Page: 23)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 23
+  Start Heading: '## Risk governance structure...' (Offset: 103342, Page: 23)
+  End Heading:   '### Supervisory Board and Board of Management...' (Offset: 103373, Page: 23)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 23
+  Start Heading: '### Supervisory Board and Board of Management...' (Offset: 103373, Page: 23)
+  End Heading:   '### Supervisory Board Risk Committee...' (Offset: 104587, Page: 24)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 24
+  Start Heading: '### Supervisory Board Risk Committee...' (Offset: 104587, Page: 24)
+  End Heading:   '### Group Finance and Risk Committee...' (Offset: 105137, Page: 24)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 24
+  Start Heading: '### Group Finance and Risk Committee...' (Offset: 105137, Page: 24)
+  End Heading:   '### Overall risk organization and roles in risk ma...' (Offset: 106171, Page: 24)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 24
+  Start Heading: '### Overall risk organization and roles in risk ma...' (Offset: 106171, Page: 24)
+  End Heading:   '### Risk management function...' (Offset: 108036, Page: 24)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 24
+  Start Heading: '### Risk management function...' (Offset: 108036, Page: 24)
+  End Heading:   '### Other functions and bodies...' (Offset: 109021, Page: 24)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 24
+  Start Heading: '### Other functions and bodies...' (Offset: 109021, Page: 24)
+  End Heading:   '## Risk profile, risk-based steering and risk mana...' (Offset: 111668, Page: 25)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 25
+  Start Heading: '## Risk profile, risk-based steering and risk mana...' (Offset: 111668, Page: 25)
+  End Heading:   '### Risk profile...' (Offset: 111727, Page: 25)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 25
+  Start Heading: '### Risk profile...' (Offset: 111727, Page: 25)
+  End Heading:   '### Market risk...' (Offset: 112814, Page: 25)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 25
+  Start Heading: '### Market risk...' (Offset: 112814, Page: 25)
+  End Heading:   '### Interest rate risk...' (Offset: 116134, Page: 25)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 25
+  Start Heading: '### Interest rate risk...' (Offset: 116134, Page: 25)
+  End Heading:   '### Inflation risk...' (Offset: 116604, Page: 25)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 25
+  Start Heading: '### Inflation risk...' (Offset: 116604, Page: 25)
+  End Heading:   '### Equity risk...' (Offset: 117717, Page: 25)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 25
+  Start Heading: '### Equity risk...' (Offset: 117717, Page: 25)
+  End Heading:   '### Credit spread risk...' (Offset: 118281, Page: 25)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 25
+  Start Heading: '### Credit spread risk...' (Offset: 118281, Page: 25)
+  End Heading:   '### Currency risk...' (Offset: 119013, Page: 26)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 26
+  Start Heading: '### Currency risk...' (Offset: 119013, Page: 26)
+  End Heading:   '### Real estate risk...' (Offset: 120056, Page: 26)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 26
+  Start Heading: '### Real estate risk...' (Offset: 120056, Page: 26)
+  End Heading:   '### Credit risk...' (Offset: 121013, Page: 26)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 26
+  Start Heading: '### Credit risk...' (Offset: 121013, Page: 26)
+  End Heading:   '### Underwriting risk...' (Offset: 123779, Page: 26)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 26
+  Start Heading: '### Underwriting risk...' (Offset: 123779, Page: 26)
+  End Heading:   '#### Property-Casualty...' (Offset: 123803, Page: 26)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 26
+  Start Heading: '#### Property-Casualty...' (Offset: 123803, Page: 26)
+  End Heading:   '#### Life/Health...' (Offset: 127234, Page: 27)
+  [INFO] Found 10 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 27
+  Start Heading: '#### Life/Health...' (Offset: 127234, Page: 27)
+  End Heading:   '#### Business risk...' (Offset: 128398, Page: 27)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 27
+  Start Heading: '#### Business risk...' (Offset: 128398, Page: 27)
+  End Heading:   '#### Operational risk...' (Offset: 130115, Page: 27)
+  [INFO] Found 6 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 27
+  Start Heading: '#### Operational risk...' (Offset: 130115, Page: 27)
+  End Heading:   '#### Other material risks not modeled in the inter...' (Offset: 134347, Page: 28)
+  [INFO] Found 10 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 28
+  Start Heading: '#### Other material risks not modeled in the inter...' (Offset: 134347, Page: 28)
+  End Heading:   '#### Liquidity risk...' (Offset: 134892, Page: 28)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 28
+  Start Heading: '#### Liquidity risk...' (Offset: 134892, Page: 28)
+  End Heading:   '#### Strategic risk...' (Offset: 139037, Page: 28)
+  [INFO] Found 16 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 28
+  Start Heading: '#### Strategic risk...' (Offset: 139037, Page: 28)
+  End Heading:   '#### Reputational risk...' (Offset: 139985, Page: 28)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 28
+  Start Heading: '#### Reputational risk...' (Offset: 139985, Page: 28)
+  End Heading:   '### Emerging risks...' (Offset: 141306, Page: 29)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 29
+  Start Heading: '### Emerging risks...' (Offset: 141306, Page: 29)
+  End Heading:   '### Risk-based steering and risk management...' (Offset: 145289, Page: 29)
+  [INFO] Found 7 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 29
+  Start Heading: '### Risk-based steering and risk management...' (Offset: 145289, Page: 29)
+  End Heading:   '## Internal risk capital framework...' (Offset: 146955, Page: 29)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 29
+  Start Heading: '## Internal risk capital framework...' (Offset: 146955, Page: 29)
+  End Heading:   '## General approach...' (Offset: 147425, Page: 29)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 29
+  Start Heading: '## General approach...' (Offset: 147425, Page: 29)
+  End Heading:   '## Coverage of the risk capital calculations...' (Offset: 149416, Page: 30)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 29) ## Internal model...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 30
+  Start Heading: '## Coverage of the risk capital calculations...' (Offset: 149416, Page: 30)
+  End Heading:   '## Model limitations...' (Offset: 150298, Page: 30)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 30
+  Start Heading: '## Model limitations...' (Offset: 150298, Page: 30)
+  End Heading:   '# Qualitative risk assessment...' (Offset: 152124, Page: 30)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 30
+  Start Heading: '# Qualitative risk assessment...' (Offset: 152124, Page: 30)
+  End Heading:   '# Solvency II capitalization...' (Offset: 152529, Page: 30)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 30
+  Start Heading: '# Solvency II capitalization...' (Offset: 152529, Page: 30)
+  End Heading:   '# Quantifiable risks and opportunities by risk cat...' (Offset: 153855, Page: 30)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 30) # Allianz SE: Solvency II capitalization...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 30
+  Start Heading: '# Quantifiable risks and opportunities by risk cat...' (Offset: 153855, Page: 30)
+  End Heading:   '# Market risk...' (Offset: 156618, Page: 31)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 31) # Allianz SE: Allocated risk according to the risk profile € mn...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '# Market risk...' (Offset: 156618, Page: 31)
+  End Heading:   '# Credit risk...' (Offset: 156804, Page: 31)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '# Credit risk...' (Offset: 156804, Page: 31)
+  End Heading:   '# Underwriting risk...' (Offset: 156932, Page: 31)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '# Underwriting risk...' (Offset: 156932, Page: 31)
+  End Heading:   '# Property-Casualty...' (Offset: 157772, Page: 31)
+  [INFO] Found 22 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '# Property-Casualty...' (Offset: 157772, Page: 31)
+  End Heading:   '## Premium risk...' (Offset: 157794, Page: 31)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '## Premium risk...' (Offset: 157794, Page: 31)
+  End Heading:   '## Reserve risk...' (Offset: 158299, Page: 31)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '## Reserve risk...' (Offset: 158299, Page: 31)
+  End Heading:   '## Life/Health...' (Offset: 158565, Page: 31)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '## Life/Health...' (Offset: 158565, Page: 31)
+  End Heading:   '## Business risk...' (Offset: 158894, Page: 31)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '## Business risk...' (Offset: 158894, Page: 31)
+  End Heading:   '## Operational risk...' (Offset: 159053, Page: 31)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '## Operational risk...' (Offset: 159053, Page: 31)
+  End Heading:   '### Outlook...' (Offset: 159393, Page: 31)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '### Outlook...' (Offset: 159393, Page: 31)
+  End Heading:   '#### Potential risks in the financial markets and ...' (Offset: 159407, Page: 31)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '#### Potential risks in the financial markets and ...' (Offset: 159407, Page: 31)
+  End Heading:   '#### Global conflicts and destabilization...' (Offset: 159996, Page: 31)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '#### Global conflicts and destabilization...' (Offset: 159996, Page: 31)
+  End Heading:   '#### Other factors of risk...' (Offset: 160457, Page: 31)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 31
+  Start Heading: '#### Other factors of risk...' (Offset: 160457, Page: 31)
+  End Heading:   '#### Outlook on regulatory developments...' (Offset: 162519, Page: 32)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 32
+  Start Heading: '#### Outlook on regulatory developments...' (Offset: 162519, Page: 32)
+  End Heading:   '# CORPORATE GOVERNANCE STATEMENT...' (Offset: 167667, Page: 33)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 32) #### Management assessment1...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 33
+  Start Heading: '# CORPORATE GOVERNANCE STATEMENT...' (Offset: 167667, Page: 33)
+  End Heading:   '## Corporate Constitution of the European Company ...' (Offset: 168039, Page: 33)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 33
+  Start Heading: '## Corporate Constitution of the European Company ...' (Offset: 168039, Page: 33)
+  End Heading:   '## Regulatory requirements...' (Offset: 168559, Page: 33)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 33
+  Start Heading: '## Regulatory requirements...' (Offset: 168559, Page: 33)
+  End Heading:   '## Declaration of Conformity with the German Corpo...' (Offset: 169284, Page: 33)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 33
+  Start Heading: '## Declaration of Conformity with the German Corpo...' (Offset: 169284, Page: 33)
+  End Heading:   '### Declaration of Conformity in accordance with §...' (Offset: 169924, Page: 33)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 33
+  Start Heading: '### Declaration of Conformity in accordance with §...' (Offset: 169924, Page: 33)
+  End Heading:   '# Board of Management...' (Offset: 170882, Page: 33)
+  [INFO] Found 7 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 33
+  Start Heading: '# Board of Management...' (Offset: 170882, Page: 33)
+  End Heading:   '## Composition and operations of the Board of Mana...' (Offset: 171475, Page: 33)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 33
+  Start Heading: '## Composition and operations of the Board of Mana...' (Offset: 171475, Page: 33)
+  End Heading:   '## Composition and operations of the Board of Mana...' (Offset: 174516, Page: 34)
+  [INFO] Found 6 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 34
+  Start Heading: '## Composition and operations of the Board of Mana...' (Offset: 174516, Page: 34)
+  End Heading:   '## Group committees...' (Offset: 177201, Page: 34)
+  [INFO] Found 18 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 34
+  Start Heading: '## Group committees...' (Offset: 177201, Page: 34)
+  End Heading:   '# Diversity concept for the Board of Management an...' (Offset: 179348, Page: 34)
+  [INFO] Found 13 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 34
+  Start Heading: '# Diversity concept for the Board of Management an...' (Offset: 179348, Page: 34)
+  End Heading:   '## Remuneration of the Board of Management...' (Offset: 182018, Page: 35)
+  [INFO] Found 8 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 35
+  Start Heading: '## Remuneration of the Board of Management...' (Offset: 182018, Page: 35)
+  End Heading:   '## Cooperation with the Supervisory Board...' (Offset: 182337, Page: 35)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 35
+  Start Heading: '## Cooperation with the Supervisory Board...' (Offset: 182337, Page: 35)
+  End Heading:   '## Supervisory Board...' (Offset: 183379, Page: 35)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 35
+  Start Heading: '## Supervisory Board...' (Offset: 183379, Page: 35)
+  End Heading:   '## Composition and operations of the Supervisory B...' (Offset: 183922, Page: 35)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 35
+  Start Heading: '## Composition and operations of the Supervisory B...' (Offset: 183922, Page: 35)
+  End Heading:   '## Composition and operations of the Supervisory B...' (Offset: 186696, Page: 35)
+  [INFO] Found 7 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 35
+  Start Heading: '## Composition and operations of the Supervisory B...' (Offset: 186696, Page: 35)
+  End Heading:   '# Supervisory Board committees...' (Offset: 187249, Page: 36)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 36
+  Start Heading: '# Supervisory Board committees...' (Offset: 187249, Page: 36)
+  End Heading:   '# Objectives of the Supervisory Board regarding it...' (Offset: 193170, Page: 36)
+  [INFO] Found 31 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 36
+  Start Heading: '# Objectives of the Supervisory Board regarding it...' (Offset: 193170, Page: 36)
+  End Heading:   '## Objectives for the composition of Allianz SE's ...' (Offset: 193870, Page: 37)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '## Objectives for the composition of Allianz SE's ...' (Offset: 193870, Page: 37)
+  End Heading:   '### I. Requirements relating to the individual mem...' (Offset: 194817, Page: 37)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '### I. Requirements relating to the individual mem...' (Offset: 194817, Page: 37)
+  End Heading:   '#### 2. Fitness...' (Offset: 195417, Page: 37)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 37) #### 1. Propriety...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '#### 2. Fitness...' (Offset: 195417, Page: 37)
+  End Heading:   '#### 3. Independence...' (Offset: 196264, Page: 37)
+  [INFO] Found 6 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '#### 3. Independence...' (Offset: 196264, Page: 37)
+  End Heading:   '#### 4. Time of availability...' (Offset: 197690, Page: 37)
+  [INFO] Found 7 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '#### 4. Time of availability...' (Offset: 197690, Page: 37)
+  End Heading:   '#### 5. Retirement age...' (Offset: 199675, Page: 37)
+  [INFO] Found 10 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '#### 5. Retirement age...' (Offset: 199675, Page: 37)
+  End Heading:   '#### 6. Term of membership...' (Offset: 199791, Page: 37)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '#### 6. Term of membership...' (Offset: 199791, Page: 37)
+  End Heading:   '##### 7. Former Allianz SE Management Board member...' (Offset: 199937, Page: 37)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '##### 7. Former Allianz SE Management Board member...' (Offset: 199937, Page: 37)
+  End Heading:   '### II. Requirements for the entire Supervisory Bo...' (Offset: 200250, Page: 37)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '### II. Requirements for the entire Supervisory Bo...' (Offset: 200250, Page: 37)
+  End Heading:   '#### 1. Profile of skills and expertise for the en...' (Offset: 200306, Page: 37)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '#### 1. Profile of skills and expertise for the en...' (Offset: 200306, Page: 37)
+  End Heading:   '#### 2. Diversity concept...' (Offset: 201983, Page: 37)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 37
+  Start Heading: '#### 2. Diversity concept...' (Offset: 201983, Page: 37)
+  End Heading:   '##### B_ Management Report of Allianz SE...' (Offset: 203283, Page: 38)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 38
+  Start Heading: '##### B_ Management Report of Allianz SE...' (Offset: 203283, Page: 38)
+  End Heading:   '###### Supervisory Board of Allianz SE: Qualificat...' (Offset: 203929, Page: 38)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 38
+  Start Heading: '###### Supervisory Board of Allianz SE: Qualificat...' (Offset: 203929, Page: 38)
+  End Heading:   '### Supervisory Board remuneration...' (Offset: 210262, Page: 39)
+  [INFO] Found 257 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 39
+  Start Heading: '### Supervisory Board remuneration...' (Offset: 210262, Page: 39)
+  End Heading:   '### General Meeting...' (Offset: 210669, Page: 39)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 39
+  Start Heading: '### General Meeting...' (Offset: 210669, Page: 39)
+  End Heading:   '# Corporate governance practices...' (Offset: 211995, Page: 39)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 39
+  Start Heading: '# Corporate governance practices...' (Offset: 211995, Page: 39)
+  End Heading:   '## Internal control system and risk management sys...' (Offset: 212030, Page: 39)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 39
+  Start Heading: '## Internal control system and risk management sys...' (Offset: 212030, Page: 39)
+  End Heading:   '## Compliance management system...' (Offset: 212236, Page: 39)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 39
+  Start Heading: '## Compliance management system...' (Offset: 212236, Page: 39)
+  End Heading:   '## Code of Conduct...' (Offset: 212713, Page: 39)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 39
+  Start Heading: '## Code of Conduct...' (Offset: 212713, Page: 39)
+  End Heading:   '# Directors' Dealings...' (Offset: 213195, Page: 39)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 39
+  Start Heading: '# Directors' Dealings...' (Offset: 213195, Page: 39)
+  End Heading:   '# Accounting and auditing...' (Offset: 213813, Page: 39)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 39
+  Start Heading: '# Accounting and auditing...' (Offset: 213813, Page: 39)
+  End Heading:   '# Information in accordance with the German Act on...' (Offset: 215088, Page: 40)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 40
+  Start Heading: '# Information in accordance with the German Act on...' (Offset: 215088, Page: 40)
+  End Heading:   '# NON-FINANCIAL STATEMENT...' (Offset: 220756, Page: 41)
+  [INFO] Found 12 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 41
+  Start Heading: '# NON-FINANCIAL STATEMENT...' (Offset: 220756, Page: 41)
+  End Heading:   '# OTHER INFORMATION...' (Offset: 221132, Page: 42)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 42
+  Start Heading: '# OTHER INFORMATION...' (Offset: 221132, Page: 42)
+  End Heading:   '## Our steering...' (Offset: 221154, Page: 42)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 42
+  Start Heading: '## Our steering...' (Offset: 221154, Page: 42)
+  End Heading:   '## Board of Management and organizational structur...' (Offset: 221172, Page: 42)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 42
+  Start Heading: '## Board of Management and organizational structur...' (Offset: 221172, Page: 42)
+  End Heading:   '## Target setting and monitoring...' (Offset: 222365, Page: 42)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 42
+  Start Heading: '## Target setting and monitoring...' (Offset: 222365, Page: 42)
+  End Heading:   '# Branches...' (Offset: 225343, Page: 42)
+  [INFO] Found 8 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 42
+  Start Heading: '# Branches...' (Offset: 225343, Page: 42)
+  End Heading:   '# Takeover-related Statements and Explanations...' (Offset: 225666, Page: 42)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 42
+  Start Heading: '# Takeover-related Statements and Explanations...' (Offset: 225666, Page: 42)
+  End Heading:   '## Composition of share capital...' (Offset: 225901, Page: 42)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 42
+  Start Heading: '## Composition of share capital...' (Offset: 225901, Page: 42)
+  End Heading:   '## Restrictions on voting rights and share transfe...' (Offset: 226192, Page: 42)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 42
+  Start Heading: '## Restrictions on voting rights and share transfe...' (Offset: 226192, Page: 42)
+  End Heading:   '## Interests in the share capital exceeding 10% of...' (Offset: 227501, Page: 43)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 43
+  Start Heading: '## Interests in the share capital exceeding 10% of...' (Offset: 227501, Page: 43)
+  End Heading:   '## Shares with special rights conferring powers of...' (Offset: 227692, Page: 43)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 43
+  Start Heading: '## Shares with special rights conferring powers of...' (Offset: 227692, Page: 43)
+  End Heading:   '## Legal and statutory provisions applicable to th...' (Offset: 227824, Page: 43)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 43
+  Start Heading: '## Legal and statutory provisions applicable to th...' (Offset: 227824, Page: 43)
+  End Heading:   '## Authorization of the Board of Management to iss...' (Offset: 229917, Page: 43)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 43
+  Start Heading: '## Authorization of the Board of Management to iss...' (Offset: 229917, Page: 43)
+  End Heading:   '## Essential agreements of Allianz SE with change-...' (Offset: 232874, Page: 43)
+  [INFO] Found 7 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 43
+  Start Heading: '## Essential agreements of Allianz SE with change-...' (Offset: 232874, Page: 43)
+  End Heading:   '# FINANCIAL STATEMENTS OF ALLIANZ SE...' (Offset: 236665, Page: 45)
+  [INFO] Found 8 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 45
+  Start Heading: '# FINANCIAL STATEMENTS OF ALLIANZ SE...' (Offset: 236665, Page: 45)
+  End Heading:   '## FINANCIAL STATEMENTS...' (Offset: 236890, Page: 46)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 46
+  Start Heading: '## FINANCIAL STATEMENTS...' (Offset: 236890, Page: 46)
+  End Heading:   '### BALANCE SHEET...' (Offset: 236916, Page: 46)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 46
+  Start Heading: '### BALANCE SHEET...' (Offset: 236916, Page: 46)
+  End Heading:   '#### C_ Financial Statements of Allianz SE...' (Offset: 240511, Page: 47)
+  [INFO] Found 73 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 47
+  Start Heading: '#### C_ Financial Statements of Allianz SE...' (Offset: 240511, Page: 47)
+  End Heading:   '## INCOME STATEMENT...' (Offset: 246008, Page: 49)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 47) ##### € thou...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 49
+  Start Heading: '## INCOME STATEMENT...' (Offset: 246008, Page: 49)
+  End Heading:   '### NATURE OF OPERATIONS AND BASIS OF PREPARATION...' (Offset: 251636, Page: 51)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 51) ## NOTES TO THE FINANCIAL STATEMENTS...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '### NATURE OF OPERATIONS AND BASIS OF PREPARATION...' (Offset: 251636, Page: 51)
+  End Heading:   '#### Nature of operations...' (Offset: 251688, Page: 51)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '#### Nature of operations...' (Offset: 251688, Page: 51)
+  End Heading:   '#### Basis of preparation...' (Offset: 252133, Page: 51)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '#### Basis of preparation...' (Offset: 252133, Page: 51)
+  End Heading:   '### ACCOUNTING, VALUATION, AND CALCULATION METHODS...' (Offset: 252620, Page: 51)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '### ACCOUNTING, VALUATION, AND CALCULATION METHODS...' (Offset: 252620, Page: 51)
+  End Heading:   '#### Intangible assets...' (Offset: 252673, Page: 51)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '#### Intangible assets...' (Offset: 252673, Page: 51)
+  End Heading:   '#### Real estate, real estate rights, and building...' (Offset: 253122, Page: 51)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '#### Real estate, real estate rights, and building...' (Offset: 253122, Page: 51)
+  End Heading:   '#### Investments in affiliated enterprises and par...' (Offset: 253813, Page: 51)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '#### Investments in affiliated enterprises and par...' (Offset: 253813, Page: 51)
+  End Heading:   '##### Shares in affiliated enterprises and partici...' (Offset: 253877, Page: 51)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '##### Shares in affiliated enterprises and partici...' (Offset: 253877, Page: 51)
+  End Heading:   '#### Loans in affiliated enterprises and participa...' (Offset: 254639, Page: 51)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '#### Loans in affiliated enterprises and participa...' (Offset: 254639, Page: 51)
+  End Heading:   '#### Other investments...' (Offset: 254971, Page: 51)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '#### Other investments...' (Offset: 254971, Page: 51)
+  End Heading:   '#### Stocks, interests in funds, debt securities a...' (Offset: 254996, Page: 51)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 51
+  Start Heading: '#### Stocks, interests in funds, debt securities a...' (Offset: 254996, Page: 51)
+  End Heading:   '#### Registered bonds, debentures, and loans...' (Offset: 255679, Page: 52)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 52
+  Start Heading: '#### Registered bonds, debentures, and loans...' (Offset: 255679, Page: 52)
+  End Heading:   '#### Assets to meet liabilities resulting from ret...' (Offset: 256089, Page: 52)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 52
+  Start Heading: '#### Assets to meet liabilities resulting from ret...' (Offset: 256089, Page: 52)
+  End Heading:   '#### Tangible fixed assets, inventories, and misce...' (Offset: 256680, Page: 52)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 52
+  Start Heading: '#### Tangible fixed assets, inventories, and misce...' (Offset: 256680, Page: 52)
+  End Heading:   '#### Deferred tax assets...' (Offset: 257142, Page: 52)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 52
+  Start Heading: '#### Deferred tax assets...' (Offset: 257142, Page: 52)
+  End Heading:   '#### Remaining assets...' (Offset: 257440, Page: 52)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 52
+  Start Heading: '#### Remaining assets...' (Offset: 257440, Page: 52)
+  End Heading:   '#### Insurance reserves...' (Offset: 257760, Page: 52)
+  [INFO] Found 7 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 52
+  Start Heading: '#### Insurance reserves...' (Offset: 257760, Page: 52)
+  End Heading:   '#### Remaining liabilities...' (Offset: 261798, Page: 52)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 52) #### Other provisions...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 52
+  Start Heading: '#### Remaining liabilities...' (Offset: 261798, Page: 52)
+  End Heading:   '#### Prepaid expenses and deferred income...' (Offset: 262212, Page: 53)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 53
+  Start Heading: '#### Prepaid expenses and deferred income...' (Offset: 262212, Page: 53)
+  End Heading:   '#### Currency translation...' (Offset: 262460, Page: 53)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 53
+  Start Heading: '#### Currency translation...' (Offset: 262460, Page: 53)
+  End Heading:   '#### Valuation units...' (Offset: 264584, Page: 53)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 53
+  Start Heading: '#### Valuation units...' (Offset: 264584, Page: 53)
+  End Heading:   '## SUPPLEMENTARY INFORMATION ON ASSETS...' (Offset: 265719, Page: 54)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 54
+  Start Heading: '## SUPPLEMENTARY INFORMATION ON ASSETS...' (Offset: 265719, Page: 54)
+  End Heading:   '### 1 _ Change of assets A., B.I. through B.III....' (Offset: 265760, Page: 54)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 54
+  Start Heading: '### 1 _ Change of assets A., B.I. through B.III....' (Offset: 265760, Page: 54)
+  End Heading:   '### 2 _ Intangible assets...' (Offset: 270465, Page: 54)
+  [INFO] Found 202 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 54
+  Start Heading: '### 2 _ Intangible assets...' (Offset: 270465, Page: 54)
+  End Heading:   '### 3 _ Market value of investments...' (Offset: 270774, Page: 55)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 55
+  Start Heading: '### 3 _ Market value of investments...' (Offset: 270774, Page: 55)
+  End Heading:   '#### Valuation methods used to determine the marke...' (Offset: 272453, Page: 55)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 55) #### Book values and market values of investments...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 55
+  Start Heading: '#### Valuation methods used to determine the marke...' (Offset: 272453, Page: 55)
+  End Heading:   '##### Real estate...' (Offset: 272513, Page: 55)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 55
+  Start Heading: '##### Real estate...' (Offset: 272513, Page: 55)
+  End Heading:   '##### Debt securities...' (Offset: 273297, Page: 55)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 55) ##### Equity securities...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 55
+  Start Heading: '##### Debt securities...' (Offset: 273297, Page: 55)
+  End Heading:   '##### Loans...' (Offset: 273505, Page: 55)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 55
+  Start Heading: '##### Loans...' (Offset: 273505, Page: 55)
+  End Heading:   '###### Bank deposits and funds held by others unde...' (Offset: 273713, Page: 55)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 55
+  Start Heading: '###### Bank deposits and funds held by others unde...' (Offset: 273713, Page: 55)
+  End Heading:   '###### Details in accordance with §285 No. 18 of t...' (Offset: 273880, Page: 55)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 55
+  Start Heading: '###### Details in accordance with §285 No. 18 of t...' (Offset: 273880, Page: 55)
+  End Heading:   '### 4 _ Real estate, real estate rights and buildi...' (Offset: 274322, Page: 55)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 55
+  Start Heading: '### 4 _ Real estate, real estate rights and buildi...' (Offset: 274322, Page: 55)
+  End Heading:   '### 5 _ Investments in affiliated enterprises and ...' (Offset: 274605, Page: 56)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 56) #### C_ Financial Statements of Allianz SE...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 56
+  Start Heading: '### 5 _ Investments in affiliated enterprises and ...' (Offset: 274605, Page: 56)
+  End Heading:   '### 6 _ Interests in investment funds...' (Offset: 276109, Page: 56)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 56) #### € bn...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 56
+  Start Heading: '### 6 _ Interests in investment funds...' (Offset: 276109, Page: 56)
+  End Heading:   '### 7 _ Other receivables...' (Offset: 278533, Page: 56)
+  [INFO] Found 93 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 56
+  Start Heading: '### 7 _ Other receivables...' (Offset: 278533, Page: 56)
+  End Heading:   '### 8 _ Miscellaneous assets...' (Offset: 278867, Page: 56)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 56
+  Start Heading: '### 8 _ Miscellaneous assets...' (Offset: 278867, Page: 56)
+  End Heading:   '### 9 _ Deferred charges and prepaid expenses...' (Offset: 279051, Page: 56)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 56
+  Start Heading: '### 9 _ Deferred charges and prepaid expenses...' (Offset: 279051, Page: 56)
+  End Heading:   '### 10 _ Collateral...' (Offset: 279483, Page: 56)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 56
+  Start Heading: '### 10 _ Collateral...' (Offset: 279483, Page: 56)
+  End Heading:   '## SUPPLEMENTARY INFORMATION ON EQUITY AND LIABILI...' (Offset: 279831, Page: 57)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 57
+  Start Heading: '## SUPPLEMENTARY INFORMATION ON EQUITY AND LIABILI...' (Offset: 279831, Page: 57)
+  End Heading:   '### 11 _ Shareholders' equity...' (Offset: 279888, Page: 57)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 57
+  Start Heading: '### 11 _ Shareholders' equity...' (Offset: 279888, Page: 57)
+  End Heading:   '#### Issued capital...' (Offset: 279920, Page: 57)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 57
+  Start Heading: '#### Issued capital...' (Offset: 279920, Page: 57)
+  End Heading:   '#### Authorized capital...' (Offset: 280169, Page: 57)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 57
+  Start Heading: '#### Authorized capital...' (Offset: 280169, Page: 57)
+  End Heading:   '#### Conditional capital...' (Offset: 282748, Page: 57)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 57
+  Start Heading: '#### Conditional capital...' (Offset: 282748, Page: 57)
+  End Heading:   '#### Changes in the number of issued shares outsta...' (Offset: 283464, Page: 57)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 57
+  Start Heading: '#### Changes in the number of issued shares outsta...' (Offset: 283464, Page: 57)
+  End Heading:   '##### Proposal for appropriation of net earnings...' (Offset: 284289, Page: 57)
+  [INFO] Found 23 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 57
+  Start Heading: '##### Proposal for appropriation of net earnings...' (Offset: 284289, Page: 57)
+  End Heading:   '#### Treasury shares...' (Offset: 285464, Page: 58)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 58
+  Start Heading: '#### Treasury shares...' (Offset: 285464, Page: 58)
+  End Heading:   '#### Share Buy-Back Programs 2024/1 and 2024/II...' (Offset: 287292, Page: 58)
+  [INFO] Found 6 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 58
+  Start Heading: '#### Share Buy-Back Programs 2024/1 and 2024/II...' (Offset: 287292, Page: 58)
+  End Heading:   '##### Additional paid-in capital € thou...' (Offset: 288562, Page: 58)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 58
+  Start Heading: '##### Additional paid-in capital € thou...' (Offset: 288562, Page: 58)
+  End Heading:   '#### Restrictions on dividend payout...' (Offset: 289644, Page: 58)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 58) #### Revenue reserves...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 58
+  Start Heading: '#### Restrictions on dividend payout...' (Offset: 289644, Page: 58)
+  End Heading:   '### 12 _ Subordinated liabilities...' (Offset: 291026, Page: 59)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 59) ##### C_ Financial Statements of Allianz SE...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 59
+  Start Heading: '### 12 _ Subordinated liabilities...' (Offset: 291026, Page: 59)
+  End Heading:   '### 13 _ Insurance reserves...' (Offset: 291565, Page: 59)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 59
+  Start Heading: '### 13 _ Insurance reserves...' (Offset: 291565, Page: 59)
+  End Heading:   '#### Reserves for loss and loss adjustment expense...' (Offset: 293742, Page: 59)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 59) #### Aggregate policy reserves...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 59
+  Start Heading: '#### Reserves for loss and loss adjustment expense...' (Offset: 293742, Page: 59)
+  End Heading:   '##### C_ Financial Statements of Allianz SE...' (Offset: 294280, Page: 60)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 59) #### Claims equalization and similar reserves...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 60
+  Start Heading: '##### C_ Financial Statements of Allianz SE...' (Offset: 294280, Page: 60)
+  End Heading:   '### 14 _ Other provisions...' (Offset: 294326, Page: 60)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 60
+  Start Heading: '### 14 _ Other provisions...' (Offset: 294326, Page: 60)
+  End Heading:   '#### Development of other provisions...' (Offset: 294354, Page: 60)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 60
+  Start Heading: '#### Development of other provisions...' (Offset: 294354, Page: 60)
+  End Heading:   '#### Settlement amount of the offset liabilities €...' (Offset: 297060, Page: 60)
+  [INFO] Found 49 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 60
+  Start Heading: '#### Settlement amount of the offset liabilities €...' (Offset: 297060, Page: 60)
+  End Heading:   '##### Supplementary information € thou...' (Offset: 299559, Page: 61)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 60) #### Actuarial parameters...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 61
+  Start Heading: '##### Supplementary information € thou...' (Offset: 299559, Page: 61)
+  End Heading:   '#### Information on the offset assets and liabilit...' (Offset: 300820, Page: 61)
+  [INFO] Found 19 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 61
+  Start Heading: '#### Information on the offset assets and liabilit...' (Offset: 300820, Page: 61)
+  End Heading:   '### C_ Financial Statements of Allianz SE...' (Offset: 301339, Page: 62)
+  [INFO] Found 14 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 62
+  Start Heading: '### C_ Financial Statements of Allianz SE...' (Offset: 301339, Page: 62)
+  End Heading:   '### 15 _ Maturity of financial liabilities...' (Offset: 301383, Page: 62)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 62
+  Start Heading: '### 15 _ Maturity of financial liabilities...' (Offset: 301383, Page: 62)
+  End Heading:   '#### Maturity table as of 31 December 2024...' (Offset: 301537, Page: 62)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 62
+  Start Heading: '#### Maturity table as of 31 December 2024...' (Offset: 301537, Page: 62)
+  End Heading:   '#### Maturity table as of 31 December 2023...' (Offset: 303448, Page: 62)
+  [INFO] Found 59 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 62
+  Start Heading: '#### Maturity table as of 31 December 2023...' (Offset: 303448, Page: 62)
+  End Heading:   '### 16 _ Information about derivative financial in...' (Offset: 305520, Page: 63)
+  [INFO] Found 59 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 63
+  Start Heading: '### 16 _ Information about derivative financial in...' (Offset: 305520, Page: 63)
+  End Heading:   '#### Options dealing in shares and share indices a...' (Offset: 305582, Page: 63)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 63
+  Start Heading: '#### Options dealing in shares and share indices a...' (Offset: 305582, Page: 63)
+  End Heading:   '#### Forward contracts in shares and share indices...' (Offset: 307340, Page: 63)
+  [INFO] Found 38 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 63
+  Start Heading: '#### Forward contracts in shares and share indices...' (Offset: 307340, Page: 63)
+  End Heading:   '##### Forward contracts in bonds as of 31 December...' (Offset: 308436, Page: 64)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 64) #### C_ Financial Statements of Allianz SE...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 64
+  Start Heading: '##### Forward contracts in bonds as of 31 December...' (Offset: 308436, Page: 64)
+  End Heading:   '##### Forward currency contracts as of 31 December...' (Offset: 309681, Page: 64)
+  [INFO] Found 26 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 64
+  Start Heading: '##### Forward currency contracts as of 31 December...' (Offset: 309681, Page: 64)
+  End Heading:   '##### Interest rate swap contracts as of 31 Decemb...' (Offset: 311113, Page: 64)
+  [INFO] Found 26 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 64
+  Start Heading: '##### Interest rate swap contracts as of 31 Decemb...' (Offset: 311113, Page: 64)
+  End Heading:   '## SUPPLEMENTARY INFORMATION ON THE INCOME STATEME...' (Offset: 313573, Page: 66)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 65) #### C_ Financial Statements of Allianz SE...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 66
+  Start Heading: '## SUPPLEMENTARY INFORMATION ON THE INCOME STATEME...' (Offset: 313573, Page: 66)
+  End Heading:   '### 17 _ Gross premiums written...' (Offset: 313628, Page: 66)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 66
+  Start Heading: '### 17 _ Gross premiums written...' (Offset: 313628, Page: 66)
+  End Heading:   '### 18 _ Allocated interest return (net)...' (Offset: 314293, Page: 66)
+  [INFO] Found 14 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 66
+  Start Heading: '### 18 _ Allocated interest return (net)...' (Offset: 314293, Page: 66)
+  End Heading:   '### 19 _ Run-off result...' (Offset: 314570, Page: 66)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 66
+  Start Heading: '### 19 _ Run-off result...' (Offset: 314570, Page: 66)
+  End Heading:   '#### 20 _ Change in other insurance reserves (net)...' (Offset: 314846, Page: 66)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 66
+  Start Heading: '#### 20 _ Change in other insurance reserves (net)...' (Offset: 314846, Page: 66)
+  End Heading:   '##### 21 _ Underwriting expenses (net)...' (Offset: 315422, Page: 66)
+  [INFO] Found 15 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 66
+  Start Heading: '##### 21 _ Underwriting expenses (net)...' (Offset: 315422, Page: 66)
+  End Heading:   '### 22 _ Investment income...' (Offset: 316053, Page: 66)
+  [INFO] Found 14 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 66
+  Start Heading: '### 22 _ Investment income...' (Offset: 316053, Page: 66)
+  End Heading:   '### 23 _ Investment expenses...' (Offset: 318214, Page: 67)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 67) #### C_ Financial Statements of Allianz SE...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 67
+  Start Heading: '### 23 _ Investment expenses...' (Offset: 318214, Page: 67)
+  End Heading:   '### 24 _ Other non-technical result...' (Offset: 319699, Page: 67)
+  [INFO] Found 48 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 67
+  Start Heading: '### 24 _ Other non-technical result...' (Offset: 319699, Page: 67)
+  End Heading:   '##### Fees to the auditor...' (Offset: 324144, Page: 68)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 68) #### C_ Financial Statements of Allianz SE...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 68
+  Start Heading: '##### Fees to the auditor...' (Offset: 324144, Page: 68)
+  End Heading:   '### 25 _ Income taxes...' (Offset: 325284, Page: 68)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 68
+  Start Heading: '### 25 _ Income taxes...' (Offset: 325284, Page: 68)
+  End Heading:   '### 26 _ Net earnings...' (Offset: 327275, Page: 68)
+  [INFO] Found 8 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 68
+  Start Heading: '### 26 _ Net earnings...' (Offset: 327275, Page: 68)
+  End Heading:   '## OTHER INFORMATION...' (Offset: 327885, Page: 69)
+  [INFO] Found 16 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 69
+  Start Heading: '## OTHER INFORMATION...' (Offset: 327885, Page: 69)
+  End Heading:   '### Contingent liabilities...' (Offset: 327982, Page: 69)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 69) ### Contingent liabilities, other financial commitments, and litigatio...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 69
+  Start Heading: '### Contingent liabilities...' (Offset: 327982, Page: 69)
+  End Heading:   '### Guarantees...' (Offset: 328011, Page: 69)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 69
+  Start Heading: '### Guarantees...' (Offset: 328011, Page: 69)
+  End Heading:   '### Legal obligations...' (Offset: 330029, Page: 69)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 69
+  Start Heading: '### Legal obligations...' (Offset: 330029, Page: 69)
+  End Heading:   '### Other financial commitments...' (Offset: 330602, Page: 69)
+  [INFO] Found 12 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 69
+  Start Heading: '### Other financial commitments...' (Offset: 330602, Page: 69)
+  End Heading:   '### Litigation...' (Offset: 330795, Page: 69)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 69
+  Start Heading: '### Litigation...' (Offset: 330795, Page: 69)
+  End Heading:   '## Board members...' (Offset: 332615, Page: 70)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 70
+  Start Heading: '## Board members...' (Offset: 332615, Page: 70)
+  End Heading:   '## Board of Management remuneration1...' (Offset: 332901, Page: 70)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 70
+  Start Heading: '## Board of Management remuneration1...' (Offset: 332901, Page: 70)
+  End Heading:   '### Board of Management remuneration...' (Offset: 333422, Page: 70)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 70
+  Start Heading: '### Board of Management remuneration...' (Offset: 333422, Page: 70)
+  End Heading:   '### Share-based remuneration...' (Offset: 334208, Page: 70)
+  [INFO] Found 26 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 70
+  Start Heading: '### Share-based remuneration...' (Offset: 334208, Page: 70)
+  End Heading:   '## Average number of employees...' (Offset: 335780, Page: 70)
+  [FLAW IDENTIFIED?] Found 2 other headings in this gap:
+    - (Page 70) ### Benefits to retired members of the Board of Management...
+    - (Page 70) #### € thou...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 70
+  Start Heading: '## Average number of employees...' (Offset: 335780, Page: 70)
+  End Heading:   '## Staff expenses...' (Offset: 336391, Page: 70)
+  [INFO] Found 13 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 70
+  Start Heading: '## Staff expenses...' (Offset: 336391, Page: 70)
+  End Heading:   '## Events after the balance sheet date...' (Offset: 338122, Page: 71)
+  [INFO] Found 21 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 71
+  Start Heading: '## Events after the balance sheet date...' (Offset: 338122, Page: 71)
+  End Heading:   '### Share buy-back program 2025...' (Offset: 338163, Page: 71)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 71
+  Start Heading: '### Share buy-back program 2025...' (Offset: 338163, Page: 71)
+  End Heading:   '## Information pursuant to § 160 (1) No. 8 AktG...' (Offset: 338373, Page: 71)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 71
+  Start Heading: '## Information pursuant to § 160 (1) No. 8 AktG...' (Offset: 338373, Page: 71)
+  End Heading:   '## Declaration of Conformity with the German Corpo...' (Offset: 339253, Page: 71)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 71
+  Start Heading: '## Declaration of Conformity with the German Corpo...' (Offset: 339253, Page: 71)
+  End Heading:   '## LIST OF PARTICIPATIONS OF ALLIANZ SE, MUNICH AS...' (Offset: 339741, Page: 72)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 72
+  Start Heading: '## LIST OF PARTICIPATIONS OF ALLIANZ SE, MUNICH AS...' (Offset: 339741, Page: 72)
+  End Heading:   '## FURTHER INFORMATION...' (Offset: 436755, Page: 82)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 81) ### C_ Financial Statements of Allianz SE...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 82
+  Start Heading: '## FURTHER INFORMATION...' (Offset: 436755, Page: 82)
+  End Heading:   '## INDEPENDENT AUDITOR'S REPORT...' (Offset: 438035, Page: 84)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 83) ## RESPONSIBILITY STATEMENT...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 84
+  Start Heading: '## INDEPENDENT AUDITOR'S REPORT...' (Offset: 438035, Page: 84)
+  End Heading:   '#### Audit Opinions...' (Offset: 438182, Page: 84)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 84) ### Report on the Audit of the Annual Financial Statements and of the ...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 84
+  Start Heading: '#### Audit Opinions...' (Offset: 438182, Page: 84)
+  End Heading:   '#### Basis for the Audit Opinions...' (Offset: 440092, Page: 84)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 84
+  Start Heading: '#### Basis for the Audit Opinions...' (Offset: 440092, Page: 84)
+  End Heading:   '#### Key Audit Matters in the Audit of the Annual ...' (Offset: 441380, Page: 84)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 84
+  Start Heading: '#### Key Audit Matters in the Audit of the Annual ...' (Offset: 441380, Page: 84)
+  End Heading:   '## Measurement of reserves for loss and loss adjus...' (Offset: 442306, Page: 84)
+  [INFO] Found 9 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 84
+  Start Heading: '## Measurement of reserves for loss and loss adjus...' (Offset: 442306, Page: 84)
+  End Heading:   '### Matter and issue...' (Offset: 442373, Page: 84)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 84
+  Start Heading: '### Matter and issue...' (Offset: 442373, Page: 84)
+  End Heading:   '#### D _ Further Information...' (Offset: 443548, Page: 85)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 85
+  Start Heading: '#### D _ Further Information...' (Offset: 443548, Page: 85)
+  End Heading:   '## Measurement of shares in affiliated companies a...' (Offset: 446399, Page: 85)
+  [FLAW IDENTIFIED?] Found 2 other headings in this gap:
+    - (Page 85) ### Audit approach and findings...
+    - (Page 85) ### Reference to further information...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 85
+  Start Heading: '## Measurement of shares in affiliated companies a...' (Offset: 446399, Page: 85)
+  End Heading:   '### Matter and issue...' (Offset: 446469, Page: 85)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 85
+  Start Heading: '### Matter and issue...' (Offset: 446469, Page: 85)
+  End Heading:   '### Audit approach and findings...' (Offset: 448938, Page: 85)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 85
+  Start Heading: '### Audit approach and findings...' (Offset: 448938, Page: 85)
+  End Heading:   '### Audit approach and findings...' (Offset: 448938, Page: 85)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 85
+  Start Heading: '### Audit approach and findings...' (Offset: 448938, Page: 85)
+  End Heading:   '### Reference to further information...' (Offset: 450441, Page: 85)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 85
+  Start Heading: '### Reference to further information...' (Offset: 450441, Page: 85)
+  End Heading:   '### Reference to further information...' (Offset: 450441, Page: 85)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 85
+  Start Heading: '### Reference to further information...' (Offset: 450441, Page: 85)
+  End Heading:   '### Other information...' (Offset: 450877, Page: 86)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 86
+  Start Heading: '### Other information...' (Offset: 450877, Page: 86)
+  End Heading:   '## Responsibilities of the Executive Directors and...' (Offset: 452424, Page: 86)
+  [INFO] Found 11 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 86
+  Start Heading: '## Responsibilities of the Executive Directors and...' (Offset: 452424, Page: 86)
+  End Heading:   '## Auditor's Responsibilities for the Audit of the...' (Offset: 454673, Page: 86)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 86
+  Start Heading: '## Auditor's Responsibilities for the Audit of the...' (Offset: 454673, Page: 86)
+  End Heading:   '### D _ Further Information...' (Offset: 457972, Page: 87)
+  [INFO] Found 8 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 87
+  Start Heading: '### D _ Further Information...' (Offset: 457972, Page: 87)
+  End Heading:   '### Assurance opinion...' (Offset: 460702, Page: 87)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 87) ## Other Legal and Regulatory Requirements...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 87
+  Start Heading: '### Assurance opinion...' (Offset: 460702, Page: 87)
+  End Heading:   '### Basis for the assurance opinion...' (Offset: 462327, Page: 87)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 87
+  Start Heading: '### Basis for the assurance opinion...' (Offset: 462327, Page: 87)
+  End Heading:   '### Responsibilities of the Executive Directors an...' (Offset: 463137, Page: 87)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 87
+  Start Heading: '### Responsibilities of the Executive Directors an...' (Offset: 463137, Page: 87)
+  End Heading:   '### Auditor's responsibilities for the assurance w...' (Offset: 463955, Page: 87)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 87
+  Start Heading: '### Auditor's responsibilities for the assurance w...' (Offset: 463955, Page: 87)
+  End Heading:   '#### D _ Further Information...' (Offset: 465032, Page: 88)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 88
+  Start Heading: '#### D _ Further Information...' (Offset: 465032, Page: 88)
+  End Heading:   '### Further Information pursuant to Article 10 of ...' (Offset: 465550, Page: 88)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 88
+  Start Heading: '### Further Information pursuant to Article 10 of ...' (Offset: 465550, Page: 88)
+  End Heading:   '### Reference to an other matter - use of the audi...' (Offset: 466072, Page: 88)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 88
+  Start Heading: '### Reference to an other matter - use of the audi...' (Offset: 466072, Page: 88)
+  End Heading:   '## German Public Auditor Responsible for the Engag...' (Offset: 466941, Page: 88)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 88
+  Start Heading: '## German Public Auditor Responsible for the Engag...' (Offset: 466941, Page: 88)
+  End Heading:   '## REMUNERATION REPORT...' (Offset: 467529, Page: 89)
+  [INFO] Found 10 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 89
+  Start Heading: '## REMUNERATION REPORT...' (Offset: 467529, Page: 89)
+  End Heading:   '### Group financial targets...' (Offset: 468855, Page: 89)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 89
+  Start Heading: '### Group financial targets...' (Offset: 468855, Page: 89)
+  End Heading:   '## The remuneration year of 2024 at a glance...' (Offset: 469104, Page: 89)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 89
+  Start Heading: '## The remuneration year of 2024 at a glance...' (Offset: 469104, Page: 89)
+  End Heading:   '### The economic and geopolitical environment...' (Offset: 469151, Page: 89)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 89
+  Start Heading: '### The economic and geopolitical environment...' (Offset: 469151, Page: 89)
+  End Heading:   '### Operating profit...' (Offset: 470438, Page: 89)
+  [INFO] Found 12 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 89
+  Start Heading: '### Operating profit...' (Offset: 470438, Page: 89)
+  End Heading:   '### Net income attributable to shareholders...' (Offset: 470702, Page: 89)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 89
+  Start Heading: '### Net income attributable to shareholders...' (Offset: 470702, Page: 89)
+  End Heading:   '### Board of Management performance in 2024...' (Offset: 471985, Page: 90)
+  [INFO] Found 15 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 90
+  Start Heading: '### Board of Management performance in 2024...' (Offset: 471985, Page: 90)
+  End Heading:   '### Approval of the remuneration system and Remune...' (Offset: 474420, Page: 90)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 90
+  Start Heading: '### Approval of the remuneration system and Remune...' (Offset: 474420, Page: 90)
+  End Heading:   '### Changes to the composition of the Board of Man...' (Offset: 475783, Page: 90)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 90
+  Start Heading: '### Changes to the composition of the Board of Man...' (Offset: 475783, Page: 90)
+  End Heading:   '## Remuneration of the Allianz SE Board of Managem...' (Offset: 475923, Page: 90)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 90
+  Start Heading: '## Remuneration of the Allianz SE Board of Managem...' (Offset: 475923, Page: 90)
+  End Heading:   '### Key principles of Board remuneration...' (Offset: 475979, Page: 90)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 90
+  Start Heading: '### Key principles of Board remuneration...' (Offset: 475979, Page: 90)
+  End Heading:   '## Overview of the Allianz SE remuneration system...' (Offset: 477217, Page: 91)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 91) #### D _ Further Information...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 91
+  Start Heading: '## Overview of the Allianz SE remuneration system...' (Offset: 477217, Page: 91)
+  End Heading:   '# Components...' (Offset: 477458, Page: 91)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 91
+  Start Heading: '# Components...' (Offset: 477458, Page: 91)
+  End Heading:   '## Other elements...' (Offset: 478664, Page: 91)
+  [INFO] Found 20 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 91
+  Start Heading: '## Other elements...' (Offset: 478664, Page: 91)
+  End Heading:   '# Components of the Board of Management remunerati...' (Offset: 479628, Page: 92)
+  [INFO] Found 11 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 92
+  Start Heading: '# Components of the Board of Management remunerati...' (Offset: 479628, Page: 92)
+  End Heading:   '## Base salary...' (Offset: 479714, Page: 92)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 92
+  Start Heading: '## Base salary...' (Offset: 479714, Page: 92)
+  End Heading:   '## Variable remuneration...' (Offset: 480735, Page: 92)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 92) ## Perquisites...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 92
+  Start Heading: '## Variable remuneration...' (Offset: 480735, Page: 92)
+  End Heading:   '## Target achievement factor to determine the vari...' (Offset: 481106, Page: 92)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 92
+  Start Heading: '## Target achievement factor to determine the vari...' (Offset: 481106, Page: 92)
+  End Heading:   '### Group financial targets...' (Offset: 482115, Page: 92)
+  [INFO] Found 12 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 92
+  Start Heading: '### Group financial targets...' (Offset: 482115, Page: 92)
+  End Heading:   '### Individual performance indicators...' (Offset: 483594, Page: 92)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 92
+  Start Heading: '### Individual performance indicators...' (Offset: 483594, Page: 92)
+  End Heading:   '### Determining the individual contribution factor...' (Offset: 487267, Page: 93)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 93) ## Individual contribution factor (ICF): 0.8 - 1.2...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 93
+  Start Heading: '### Determining the individual contribution factor...' (Offset: 487267, Page: 93)
+  End Heading:   '# Variable remuneration components...' (Offset: 488420, Page: 93)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 93
+  Start Heading: '# Variable remuneration components...' (Offset: 488420, Page: 93)
+  End Heading:   '## Annual bonus...' (Offset: 488457, Page: 93)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 93
+  Start Heading: '## Annual bonus...' (Offset: 488457, Page: 93)
+  End Heading:   '# LTI key features...' (Offset: 489312, Page: 94)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 94
+  Start Heading: '# LTI key features...' (Offset: 489312, Page: 94)
+  End Heading:   '## Long-term incentive - LTI...' (Offset: 489977, Page: 94)
+  [INFO] Found 17 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 94
+  Start Heading: '## Long-term incentive - LTI...' (Offset: 489977, Page: 94)
+  End Heading:   '# Additional remuneration principles...' (Offset: 495681, Page: 95)
+  [INFO] Found 21 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 95
+  Start Heading: '# Additional remuneration principles...' (Offset: 495681, Page: 95)
+  End Heading:   '## Shareholding obligation and shareholding exposu...' (Offset: 495720, Page: 95)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 95
+  Start Heading: '## Shareholding obligation and shareholding exposu...' (Offset: 495720, Page: 95)
+  End Heading:   '## Malus and clawback...' (Offset: 496697, Page: 95)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 95
+  Start Heading: '## Malus and clawback...' (Offset: 496697, Page: 95)
+  End Heading:   '## Pension contribution...' (Offset: 497525, Page: 95)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 95
+  Start Heading: '## Pension contribution...' (Offset: 497525, Page: 95)
+  End Heading:   '## Payout cap...' (Offset: 499098, Page: 95)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 95
+  Start Heading: '## Payout cap...' (Offset: 499098, Page: 95)
+  End Heading:   '## Termination of service...' (Offset: 500272, Page: 96)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '## Termination of service...' (Offset: 500272, Page: 96)
+  End Heading:   '## Severance payment cap...' (Offset: 500511, Page: 96)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '## Severance payment cap...' (Offset: 500511, Page: 96)
+  End Heading:   '## Transition payment...' (Offset: 501234, Page: 96)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '## Transition payment...' (Offset: 501234, Page: 96)
+  End Heading:   '## Miscellaneous...' (Offset: 501862, Page: 96)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '## Miscellaneous...' (Offset: 501862, Page: 96)
+  End Heading:   '### Internal and external Board appointments...' (Offset: 501881, Page: 96)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '### Internal and external Board appointments...' (Offset: 501881, Page: 96)
+  End Heading:   '### Determination of the remuneration system...' (Offset: 502891, Page: 96)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '### Determination of the remuneration system...' (Offset: 502891, Page: 96)
+  End Heading:   '### Deviation from the remuneration system...' (Offset: 503880, Page: 96)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '### Deviation from the remuneration system...' (Offset: 503880, Page: 96)
+  End Heading:   '# Determination and adjustment of Board of Managem...' (Offset: 505327, Page: 96)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '# Determination and adjustment of Board of Managem...' (Offset: 505327, Page: 96)
+  End Heading:   '## Determination and adequacy of Board of Manageme...' (Offset: 505403, Page: 96)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '## Determination and adequacy of Board of Manageme...' (Offset: 505403, Page: 96)
+  End Heading:   '## Horizontal appropriateness...' (Offset: 506025, Page: 96)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 96
+  Start Heading: '## Horizontal appropriateness...' (Offset: 506025, Page: 96)
+  End Heading:   '## Adjustment of Board of Management target remune...' (Offset: 507686, Page: 97)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 97) ## Vertical appropriateness...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 97
+  Start Heading: '## Adjustment of Board of Management target remune...' (Offset: 507686, Page: 97)
+  End Heading:   '## Remuneration adjustment for extraordinary event...' (Offset: 508851, Page: 97)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 97
+  Start Heading: '## Remuneration adjustment for extraordinary event...' (Offset: 508851, Page: 97)
+  End Heading:   '# Application of the remuneration system in the fi...' (Offset: 509656, Page: 97)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 97
+  Start Heading: '# Application of the remuneration system in the fi...' (Offset: 509656, Page: 97)
+  End Heading:   '## Variable remuneration for the financial year...' (Offset: 509721, Page: 97)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 97
+  Start Heading: '## Variable remuneration for the financial year...' (Offset: 509721, Page: 97)
+  End Heading:   '### Group financial targets and target achievement...' (Offset: 509771, Page: 97)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 97
+  Start Heading: '### Group financial targets and target achievement...' (Offset: 509771, Page: 97)
+  End Heading:   '## Individual performance indicators and applicati...' (Offset: 512489, Page: 98)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 97) #### Group financial target achievement 2023 and 2024...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 98
+  Start Heading: '## Individual performance indicators and applicati...' (Offset: 512489, Page: 98)
+  End Heading:   '## Overview target achievement and variable remune...' (Offset: 521841, Page: 99)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 99) ### D _ Further Information...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 99
+  Start Heading: '## Overview target achievement and variable remune...' (Offset: 521841, Page: 99)
+  End Heading:   '# Individual remuneration of members of the Board ...' (Offset: 526734, Page: 100)
+  [INFO] Found 247 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 100
+  Start Heading: '# Individual remuneration of members of the Board ...' (Offset: 526734, Page: 100)
+  End Heading:   '# Remuneration in the financial year...' (Offset: 530058, Page: 101)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 101) ## D _ Further Information...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 101
+  Start Heading: '# Remuneration in the financial year...' (Offset: 530058, Page: 101)
+  End Heading:   '## Individual remuneration: 2024 and 2023 € thou (...' (Offset: 530596, Page: 101)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 101
+  Start Heading: '## Individual remuneration: 2024 and 2023 € thou (...' (Offset: 530596, Page: 101)
+  End Heading:   '## LTI 2019 - Long-term Incentive payout...' (Offset: 535392, Page: 102)
+  [INFO] Found 279 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 102
+  Start Heading: '## LTI 2019 - Long-term Incentive payout...' (Offset: 535392, Page: 102)
+  End Heading:   '## LTI 2019 Sustainability assessment...' (Offset: 537063, Page: 102)
+  [INFO] Found 31 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 102
+  Start Heading: '## LTI 2019 Sustainability assessment...' (Offset: 537063, Page: 102)
+  End Heading:   '## Adherence to the overall remuneration cap - act...' (Offset: 538521, Page: 102)
+  [INFO] Found 5 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 102
+  Start Heading: '## Adherence to the overall remuneration cap - act...' (Offset: 538521, Page: 102)
+  End Heading:   '## Adherence to the overall remuneration cap...' (Offset: 539137, Page: 102)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 102
+  Start Heading: '## Adherence to the overall remuneration cap...' (Offset: 539137, Page: 102)
+  End Heading:   '# Remuneration for the financial year...' (Offset: 539987, Page: 103)
+  [INFO] Found 22 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 103
+  Start Heading: '# Remuneration for the financial year...' (Offset: 539987, Page: 103)
+  End Heading:   '## Individual remuneration: 2024 and 2023 € thou (...' (Offset: 540350, Page: 103)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 103
+  Start Heading: '## Individual remuneration: 2024 and 2023 € thou (...' (Offset: 540350, Page: 103)
+  End Heading:   '# Remuneration for members who retired from of the...' (Offset: 545209, Page: 104)
+  [INFO] Found 278 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 104
+  Start Heading: '# Remuneration for members who retired from of the...' (Offset: 545209, Page: 104)
+  End Heading:   '## Adherence to the overall remuneration cap...' (Offset: 545282, Page: 104)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 104
+  Start Heading: '## Adherence to the overall remuneration cap...' (Offset: 545282, Page: 104)
+  End Heading:   '### Adherence to the overall remuneration cap...' (Offset: 545802, Page: 104)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 104
+  Start Heading: '### Adherence to the overall remuneration cap...' (Offset: 545802, Page: 104)
+  End Heading:   '# Remuneration awarded and due in the 2024 financi...' (Offset: 547393, Page: 105)
+  [INFO] Found 57 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 105
+  Start Heading: '# Remuneration awarded and due in the 2024 financi...' (Offset: 547393, Page: 105)
+  End Heading:   '## Individual remuneration: 2024...' (Offset: 548052, Page: 105)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 105
+  Start Heading: '## Individual remuneration: 2024...' (Offset: 548052, Page: 105)
+  End Heading:   '# Share-based remuneration...' (Offset: 550852, Page: 106)
+  [INFO] Found 121 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 106
+  Start Heading: '# Share-based remuneration...' (Offset: 550852, Page: 106)
+  End Heading:   '## Shareholding requirements...' (Offset: 553922, Page: 106)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 106) ## RSU portfolio development in financial year 2024...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 106
+  Start Heading: '## Shareholding requirements...' (Offset: 553922, Page: 106)
+  End Heading:   '# Pensions...' (Offset: 556628, Page: 107)
+  [INFO] Found 56 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 107
+  Start Heading: '# Pensions...' (Offset: 556628, Page: 107)
+  End Heading:   '## Individual pensions: 2023 and 2024 € thou (tota...' (Offset: 557586, Page: 107)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 107
+  Start Heading: '## Individual pensions: 2023 and 2024 € thou (tota...' (Offset: 557586, Page: 107)
+  End Heading:   '# Comparative presentation...' (Offset: 560664, Page: 107)
+  [INFO] Found 149 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 107
+  Start Heading: '# Comparative presentation...' (Offset: 560664, Page: 107)
+  End Heading:   '### Comparative presentation...' (Offset: 562279, Page: 108)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 108) ## D _ Further Information...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 108
+  Start Heading: '### Comparative presentation...' (Offset: 562279, Page: 108)
+  End Heading:   '# Outlook Board of Management remuneration 2025...' (Offset: 567906, Page: 109)
+  [INFO] Found 208 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 109
+  Start Heading: '# Outlook Board of Management remuneration 2025...' (Offset: 567906, Page: 109)
+  End Heading:   '## Improved transparency...' (Offset: 568898, Page: 109)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 109
+  Start Heading: '## Improved transparency...' (Offset: 568898, Page: 109)
+  End Heading:   '## Adjustments to target remuneration and maximum ...' (Offset: 572367, Page: 109)
+  [INFO] Found 53 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 109
+  Start Heading: '## Adjustments to target remuneration and maximum ...' (Offset: 572367, Page: 109)
+  End Heading:   '## Horizontal comparison...' (Offset: 573948, Page: 110)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 110
+  Start Heading: '## Horizontal comparison...' (Offset: 573948, Page: 110)
+  End Heading:   '## Vertical comparison...' (Offset: 575735, Page: 110)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 110
+  Start Heading: '## Vertical comparison...' (Offset: 575735, Page: 110)
+  End Heading:   '## Maximum compensation...' (Offset: 576437, Page: 110)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 110
+  Start Heading: '## Maximum compensation...' (Offset: 576437, Page: 110)
+  End Heading:   '# Bonus curve for net income attributable to share...' (Offset: 580257, Page: 111)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 111) ### D _ Further Information...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 111
+  Start Heading: '# Bonus curve for net income attributable to share...' (Offset: 580257, Page: 111)
+  End Heading:   '# Remuneration of the Allianz SE Supervisory Board...' (Offset: 580989, Page: 112)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 112
+  Start Heading: '# Remuneration of the Allianz SE Supervisory Board...' (Offset: 580989, Page: 112)
+  End Heading:   '## Remuneration principles...' (Offset: 581379, Page: 112)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 112
+  Start Heading: '## Remuneration principles...' (Offset: 581379, Page: 112)
+  End Heading:   '## Remuneration structure and components...' (Offset: 582302, Page: 112)
+  [INFO] Found 4 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 112
+  Start Heading: '## Remuneration structure and components...' (Offset: 582302, Page: 112)
+  End Heading:   '## Fixed annual remuneration...' (Offset: 582863, Page: 112)
+  [INFO] Found 2 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 112
+  Start Heading: '## Fixed annual remuneration...' (Offset: 582863, Page: 112)
+  End Heading:   '## Committee-related remuneration...' (Offset: 583244, Page: 112)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 112
+  Start Heading: '## Committee-related remuneration...' (Offset: 583244, Page: 112)
+  End Heading:   '## Attendance fees and expenses...' (Offset: 583562, Page: 112)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 112
+  Start Heading: '## Attendance fees and expenses...' (Offset: 583562, Page: 112)
+  End Heading:   '### Remuneration awarded and due...' (Offset: 584900, Page: 112)
+  [INFO] Found 23 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 112
+  Start Heading: '### Remuneration awarded and due...' (Offset: 584900, Page: 112)
+  End Heading:   '##### Individual remuneration: 2024 and 2023 € tho...' (Offset: 585299, Page: 113)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 113) #### D _ Further Information...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 113
+  Start Heading: '##### Individual remuneration: 2024 and 2023 € tho...' (Offset: 585299, Page: 113)
+  End Heading:   '## Comparative presentation...' (Offset: 592517, Page: 114)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 114) ## Comparative presentation...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 114
+  Start Heading: '## Comparative presentation...' (Offset: 592517, Page: 114)
+  End Heading:   '## Comparative presentation...' (Offset: 592517, Page: 114)
+  [FLAW IDENTIFIED?] No content items of ANY type were found between these two offsets.
+  [RAW TEXT EMPTY] The raw markdown string is also empty between these headings.
+  [CONCLUSION] The headings are back-to-back. The section is truly empty.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 114
+  Start Heading: '## Comparative presentation...' (Offset: 592517, Page: 114)
+  End Heading:   '# AUDITOR'S REPORT ON THE REMUNERATION REPORT...' (Offset: 597586, Page: 115)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 114) ## Remuneration for mandates in other Allianz companies and for other ...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 115
+  Start Heading: '# AUDITOR'S REPORT ON THE REMUNERATION REPORT...' (Offset: 597586, Page: 115)
+  End Heading:   '### Auditor's Report...' (Offset: 597661, Page: 115)
+  [FLAW IDENTIFIED?] Found 1 other headings in this gap:
+    - (Page 115) ## To Allianz SE, Munich...
+  [CONCLUSION] The problem is in heading_aligner.py. It failed to validate these headings,
+  so section_parser.py is skipping over them and creating a giant, incorrect section.
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 115
+  Start Heading: '### Auditor's Report...' (Offset: 597661, Page: 115)
+  End Heading:   '#### Responsibilities of the Executive Directors a...' (Offset: 597942, Page: 115)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 115
+  Start Heading: '#### Responsibilities of the Executive Directors a...' (Offset: 597942, Page: 115)
+  End Heading:   '#### Auditor's Responsibilities...' (Offset: 598520, Page: 115)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 115
+  Start Heading: '#### Auditor's Responsibilities...' (Offset: 598520, Page: 115)
+  End Heading:   '#### Audit Opinion...' (Offset: 600301, Page: 115)
+  [INFO] Found 3 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 115
+  Start Heading: '#### Audit Opinion...' (Offset: 600301, Page: 115)
+  End Heading:   '#### Reference to an Other Matter - Formal Audit o...' (Offset: 600573, Page: 115)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+DEBUGGING PAGE: 115
+  Start Heading: '#### Reference to an Other Matter - Formal Audit o...' (Offset: 600573, Page: 115)
+  End Heading:   '#### Restriction on use...' (Offset: 601152, Page: 115)
+  [INFO] Found 1 valid content items (paragraphs, tables, etc.).
+================================================================================
+
+
+================================================================================
+--- DEBUG RUN COMPLETE ---
+================================================================================
+Total Sections Checked: 380
+Total Blank Sections Found (entire document): 48
+Blank Sections in Debug Range (pages 3-115): 48
+
+Percentage of blank sections: 12.63%
+
+Detailed debug output saved to: output/debug_results_20251104_101038.txt
+Review the 'DEBUGGING PAGE' sections above to identify the flaw.
+================================================================================
+
