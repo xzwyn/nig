@@ -1,16 +1,36 @@
 ' ===== CONFIG =====
-Const ENABLE_DEFRAG As Boolean = True
-Const DEFRAG_MIN_CHARS As Long = 120
-Const DEFRAG_SENT_ENDS As String = ".?!:;)""]"
-
-Const PENALTY_1x2 As Double = 12#
-Const PENALTY_2x1 As Double = 12#
-Const PENALTY_2x2 As Double = 20#
-Const PENALTY_SKIP_BASE As Double = 120#
+' --- Alignment Penalties ---
+' Cost for matching 1 EN table to 2 DE tables
+Const PENALTY_1x2 As Double = 200#
+' Cost for matching 2 EN tables to 1 DE table
+Const PENALTY_2x1 As Double = 200#
+' Cost for every row that doesn't match
+Const PENALTY_ROW_MISMATCH As Double = 50#
+' "Infinite" cost for column counts not matching
+Const PENALTY_COL_MISMATCH As Double = 10000#
+' --- Skip Penalties ---
+Const PENALTY_SKIP_BASE As Double = 1000#
 Const PENALTY_SKIP_PER_CHAR As Double = 0.4
+
+' ===== DATA STRUCTURE =====
+' Holds the "fingerprint" of each table
+Private Type TableSignature
+    TableIndex As Long  ' The table's order in the document (e.g., 1st table, 2nd table)
+    RowCount As Long
+    ColumnCount As Long
+    CharCount As Long   ' Total characters in the table
+End Type
+
+' Holds the combined "fingerprint" of a *range* of tables (e.g., tables 2 and 3)
+Private Type CombinedSignature
+    RowCount As Long
+    ColumnCount As Long
+    CharCount As Long
+End Type
 
 ' ========= UTILITIES =========
 Private Function CleanText(ByVal s As String) As String
+    ' (This function is unchanged from your original)
     Dim t As String
     t = Replace(s, ChrW(160), " ")
     t = Replace(t, vbTab, " ")
@@ -25,65 +45,118 @@ Private Function CleanText(ByVal s As String) As String
 End Function
 
 Private Function ParaLen(ByVal s As String) As Long
+    ' (This function is unchanged from your original)
+    ' Gets character count, ignoring spaces
     ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
 End Function
 
-Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Long
-    Dim i As Long, N As Long
-    For i = i1 To i2: N = N + ParaLen(arr(i)): Next
-    SumLen = N
-End Function
-
-Private Function JoinRange(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As String
-    Dim i As Long, t As String
-    For i = i1 To i2
-        If Len(arr(i)) > 0 Then
-            If Len(t) > 0 Then
-                t = t & vbCrLf & arr(i)
-            Else
-                t = arr(i)
-            End If
-        End If
+Private Function GetTableCharCount(tbl As Table) As Long
+    ' Calculates the total "ParaLen" of all text in a table
+    Dim c As Cell, N As Long
+    N = 0
+    On Error Resume Next ' Ignore errors from (e.g.) merged cells
+    For Each c In tbl.Range.Cells
+        N = N + ParaLen(CleanText(c.Range.Text))
     Next
-    JoinRange = t
+    On Error GoTo 0
+    GetTableCharCount = N
 End Function
 
-Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolean
-    If Len(s) = 0 Then Exit Function
-    EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
-End Function
-
-Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
-    Dim p As Paragraph, tmp As New Collection, s As String
-    For Each p In doc.Paragraphs
-        s = CleanText(p.Range.Text)
-        If Len(s) > 0 Then tmp.Add s
+Private Sub CollectTableSignatures(doc As Document, ByRef tables() As TableSignature)
+    ' NEW: Loops through all tables in the document and collects their "fingerprints"
+    Dim t As Table, tmp As New Collection, sig As TableSignature
+    
+    If doc.Tables.Count = 0 Then
+        ReDim tables(1 To 1) ' Create a dummy to avoid UBound error
+        tables(1).TableIndex = 0 ' Mark as invalid
+        Exit Sub
+    End If
+    
+    For Each t In doc.Tables
+        sig.TableIndex = t.Index
+        sig.RowCount = t.Rows.Count
+        sig.ColumnCount = t.Columns.Count
+        sig.CharCount = GetTableCharCount(t)
+        tmp.Add sig
     Next
-    ReDim texts(1 To tmp.Count)
+    
+    ReDim tables(1 To tmp.Count)
     Dim i As Long
-    For i = 1 To tmp.Count: texts(i) = tmp(i): Next
+    For i = 1 To tmp.Count: tables(i) = tmp(i): Next
 End Sub
 
-Private Sub DefragmentParas(ByRef arr() As String)
-    If Not ENABLE_DEFRAG Then Exit Sub
-    If UBound(arr) < 2 Then Exit Sub
-    Dim outCol As New Collection, i As Long, buf As String
-    For i = LBound(arr) To UBound(arr)
-        If Len(buf) = 0 Then
-            buf = arr(i)
-        Else
-            buf = buf & " " & arr(i)
+Private Function SumSignatures(arr() As TableSignature, ByVal i1 As Long, ByVal i2 As Long) As CombinedSignature
+    ' NEW: Combines the "fingerprints" of a range of tables (e.g., tables 2 and 3)
+    ' This is used for 1x2 and 2x1 matches
+    Dim out As CombinedSignature, i As Long
+    
+    If i1 > i2 Or arr(i1).TableIndex = 0 Then
+        ' Return an empty/invalid signature
+        out.ColumnCount = -1
+        Exit Function
+    End If
+    
+    ' Start with the signature of the first table
+    out.ColumnCount = arr(i1).ColumnCount
+    
+    ' Add all tables in the range
+    For i = i1 To i2
+        ' CRITICAL: If column counts don't match, this combination is invalid.
+        If arr(i).ColumnCount <> out.ColumnCount Then
+            out.ColumnCount = -1 ' Mark as invalid
+            out.CharCount = 0
+            out.RowCount = 0
+            Exit Function
         End If
-        Dim enough As Boolean
-        enough = (ParaLen(buf) >= DEFRAG_MIN_CHARS) Or EndsWithAny(buf, DEFRAG_SENT_ENDS)
-        If enough Then outCol.Add Trim$(buf): buf = ""
+        out.RowCount = out.RowCount + arr(i).RowCount
+        out.CharCount = out.CharCount + arr(i).CharCount
     Next
-    If Len(buf) > 0 Then outCol.Add Trim$(buf)
-    ReDim arr(1 To outCol.Count)
-    For i = 1 To outCol.Count: arr(i) = outCol(i): Next
+    SumSignatures = out
+End Function
+
+Private Function CompareSignatures(enSig As CombinedSignature, deSig As CombinedSignature, ratio As Double) As Double
+    ' NEW: This is the core "AlignCost" logic for tables
+    
+    ' 1. Column Mismatch Check (Deal-breaker)
+    ' If column counts are invalid (-1) or don't match, return a huge penalty.
+    If enSig.ColumnCount = -1 Or deSig.ColumnCount = -1 Or enSig.ColumnCount <> deSig.ColumnCount Then
+        CompareSignatures = PENALTY_COL_MISMATCH
+        Exit Function
+    End If
+    
+    ' 2. Row Mismatch Penalty
+    Dim rowPenalty As Double
+    rowPenalty = Abs(enSig.RowCount - deSig.RowCount) * PENALTY_ROW_MISMATCH
+    
+    ' 3. Length (Character Count) Penalty
+    Dim lenPenalty As Double, lenEN As Long, lenDE As Long
+    lenEN = enSig.CharCount
+    lenDE = deSig.CharCount
+    
+    If lenEN > 0 Then
+        lenPenalty = Abs(lenDE - lenEN * ratio) ^ 0.9
+    ElseIf lenDE > 0 Then
+        lenPenalty = lenDE ^ 0.9 ' Penalize un-matched length
+    Else
+        lenPenalty = 0 ' Both are 0, no penalty
+    End If
+
+    ' Total cost is the sum of penalties
+    CompareSignatures = rowPenalty + lenPenalty
+End Function
+
+Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef backI() As Long, ByRef backJ() As Long, ni As Long, nj As Long, newCost As Double, action As Integer, pi As Long, pj As Long)
+    ' (This function is unchanged from your original)
+    If newCost < cost(ni, nj) Then
+        cost(ni, nj) = newCost
+        backA(ni, nj) = action
+        backI(ni, nj) = pi
+        backJ(ni, nj) = pj
+    End If
 End Sub
 
 Private Function BrowseForFile(prompt As String) As String
+    ' (This function is unchanged from your original)
     Dim fd As FileDialog
     Set fd = Application.FileDialog(msoFileDialogFilePicker)
     With fd
@@ -97,6 +170,7 @@ Private Function BrowseForFile(prompt As String) As String
 End Function
 
 Private Function ConvertPdfToDocx(pdfPath As String) As String
+    ' (This function is unchanged from your original)
     Dim doc As Document, docxPath As String
     docxPath = Replace(pdfPath, ".pdf", ".docx")
     Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False)
@@ -105,47 +179,71 @@ Private Function ConvertPdfToDocx(pdfPath As String) As String
     ConvertPdfToDocx = docxPath
 End Function
 
+Private Sub CopyTablesToCell(doc As Document, ByRef sigs() As TableSignature, iFrom As Long, iTo As Long, targetCell As Cell)
+    ' NEW: Copies the actual table(s) into the target output cell
+    If sigs(iFrom).TableIndex = 0 Then Exit Sub ' Skip if no tables
+    
+    Dim i As Long, tblIndex As Long
+    
+    ' Clear the "End of cell" marker to allow pasting
+    targetCell.Range.Characters.Last.Delete
+    
+    On Error Resume Next
+    For i = iFrom To iTo
+        tblIndex = sigs(i).TableIndex
+        
+        ' Copy the table from the source document
+        doc.Tables(tblIndex).Range.Copy
+        
+        ' Paste it into the cell's range
+        targetCell.Range.Paste
+        
+        ' Add a paragraph *after* the pasted table to stack them
+        targetCell.Range.InsertParagraphAfter
+    Next
+    On Error GoTo 0
+End Sub
+
+
 ' ========= MAIN =========
-Public Sub AlignTranslatedParagraphs_AutoPick()
-    ' Browse for first PDF file
+Public Sub AlignTranslatedTables_AutoPick()
+    ' --- 1. Get Files ---
     Dim enPDF As String
     enPDF = BrowseForFile("Select the FIRST PDF file (e.g., English):")
-    If enPDF = "" Then
-        MsgBox "No file selected. Operation cancelled.", vbExclamation
-        Exit Sub
-    End If
+    If enPDF = "" Then Exit Sub
 
-    ' Browse for second PDF file
     Dim dePDF As String
     dePDF = BrowseForFile("Select the SECOND PDF file (e.g., German):")
-    If dePDF = "" Then
-        MsgBox "No file selected. Operation cancelled.", vbExclamation
-        Exit Sub
-    End If
-
-    MsgBox "Selected files:" & vbCrLf & "First: " & enPDF & vbCrLf & "Second: " & dePDF, vbInformation
-
-    ' Convert PDFs
+    If dePDF = "" Then Exit Sub
+    
+    ' --- 2. Convert Files ---
     Dim enDocx As String, deDocx As String
     enDocx = ConvertPdfToDocx(enPDF)
     deDocx = ConvertPdfToDocx(dePDF)
-    MsgBox "Converted to DOCX successfully." & vbCrLf & enDocx & vbCrLf & deDocx, vbInformation
+    MsgBox "Converted PDFs to DOCX for processing."
 
-    ' Open
+    ' --- 3. Open & Collect Data ---
     Dim enDoc As Document, deDoc As Document
     Set enDoc = Documents.Open(enDocx, ReadOnly:=True)
     Set deDoc = Documents.Open(deDocx, ReadOnly:=True)
 
-    ' Paragraphs
-    Dim EN() As String, DE() As String
-    CollectParagraphs enDoc, EN
-    CollectParagraphs deDoc, DE
-    DefragmentParas EN: DefragmentParas DE
+    ' MODIFIED: Collect table signatures, not paragraphs
+    Dim EN() As TableSignature, DE() As TableSignature
+    CollectTableSignatures enDoc, EN
+    CollectTableSignatures deDoc, DE
 
-    ' Ratio
-    Dim i As Long, sumEN As Long, sumDE As Long
-    For i = LBound(EN) To UBound(EN): sumEN = sumEN + ParaLen(EN(i)): Next
-    For i = LBound(DE) To UBound(DE): sumDE = sumDE + ParaLen(DE(i)): Next
+    If EN(LBound(EN)).TableIndex = 0 Or DE(LBound(DE)).TableIndex = 0 Then
+        MsgBox "One of the documents contains 0 tables. Operation cancelled.", vbExclamation
+        enDoc.Close SaveChanges:=False
+        deDoc.Close SaveChanges:=False
+        Exit Sub
+    End If
+    
+    ' --- 4. Calculate Length Ratio ---
+    Dim sumEN As Long, sumDE As Long
+    sumEN = SumSignatures(EN, LBound(EN), UBound(EN)).CharCount
+    sumDE = SumSignatures(DE, LBound(DE), UBound(DE)).CharCount
+    
     Dim r As Double
     If sumEN > 0 Then
         r = sumDE / sumEN
@@ -153,13 +251,14 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
         r = 1#
     End If
 
-    ' DP arrays
+    ' --- 5. Run Dynamic Programming (Alignment) ---
+    ' (This logic is structurally identical to your original code)
     Dim N As Long, M As Long: N = UBound(EN): M = UBound(DE)
     Dim cost() As Double, backA() As Integer, backI() As Long, backJ() As Long
     ReDim cost(0 To N, 0 To M): ReDim backA(0 To N, 0 To M)
     ReDim backI(0 To N, 0 To M): ReDim backJ(0 To N, 0 To M)
     Dim INF As Double: INF = 1E+30
-    Dim j As Long
+    Dim i As Long, j As Long
     For i = 0 To N: For j = 0 To M: cost(i, j) = INF: Next: Next
     cost(0, 0) = 0
 
@@ -167,91 +266,107 @@ Public Sub AlignTranslatedParagraphs_AutoPick()
     For i = 0 To N
         For j = 0 To M
             If cost(i, j) < INF Then
-                ' 1x1 alignment
+                
+                ' 1x1 alignment (MODIFIED to use table signatures)
                 If i + 1 <= N And j + 1 <= M Then
-                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 1, r, 0#)
+                    c = CompareSignatures(SumSignatures(EN, i + 1, i + 1), SumSignatures(DE, j + 1, j + 1), r)
                     UpdateCell cost, backA, backI, backJ, i + 1, j + 1, cost(i, j) + c, 1, i, j
                 End If
-                ' 1x2 alignment
+                
+                ' 1x2 alignment (MODIFIED to use table signatures)
                 If i + 1 <= N And j + 2 <= M Then
-                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 2, r, PENALTY_1x2)
+                    c = CompareSignatures(SumSignatures(EN, i + 1, i + 1), SumSignatures(DE, j + 1, j + 2), r) + PENALTY_1x2
                     UpdateCell cost, backA, backI, backJ, i + 1, j + 2, cost(i, j) + c, 2, i, j
                 End If
-                ' 2x1 alignment
+                
+                ' 2x1 alignment (MODIFIED to use table signatures)
                 If i + 2 <= N And j + 1 <= M Then
-                    c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 1, r, PENALTY_2x1)
+                    c = CompareSignatures(SumSignatures(EN, i + 1, i + 2), SumSignatures(DE, j + 1, j + 1), r) + PENALTY_2x1
                     UpdateCell cost, backA, backI, backJ, i + 2, j + 1, cost(i, j) + c, 3, i, j
                 End If
-                ' Skip EN paragraph
+                
+                ' Skip EN table (MODIFIED to use table CharCount)
                 If i + 1 <= N Then
-                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(EN(i + 1))
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * EN(i + 1).CharCount
                     UpdateCell cost, backA, backI, backJ, i + 1, j, cost(i, j) + c, 5, i, j
                 End If
-                ' Skip DE paragraph
+                
+                ' Skip DE table (MODIFIED to use table CharCount)
                 If j + 1 <= M Then
-                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(DE(j + 1))
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * DE(j + 1).CharCount
                     UpdateCell cost, backA, backI, backJ, i, j + 1, cost(i, j) + c, 6, i, j
                 End If
             End If
         Next
     Next
 
-    ' Backtrack
+    ' --- 6. Backtrack ---
+    ' (This logic is unchanged from your original)
     Dim pairs As New Collection, i1 As Long: i1 = N
     Dim j1 As Long: j1 = M
     Do While Not (i1 = 0 And j1 = 0)
         Dim a As Integer, pi As Long, pj As Long, rec As Variant
         a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
+        ' We store the *array indices*, not the table indices
         rec = Array(a, pi + 1, i1, pj + 1, j1)
         pairs.Add rec
         i1 = pi: j1 = pj
     Loop
 
-    ' Close source documents
-    enDoc.Close SaveChanges:=False
-    deDoc.Close SaveChanges:=False
-
-    ' Output table
+    ' --- 7. Output Table ---
+    ' (This section is HEAVILY MODIFIED to copy tables)
     Dim outDoc As Document: Set outDoc = Documents.Add
     Dim rows As Long: rows = pairs.Count + 1
     Dim tbl As Table
     Set tbl = outDoc.Tables.Add(Range:=outDoc.Range(0, 0), NumRows:=rows, NumColumns:=3)
     tbl.Style = "Table Grid"
-    tbl.Cell(1, 1).Range.Text = "English"
-    tbl.Cell(1, 2).Range.Text = "German"
-    tbl.Cell(1, 3).Range.Text = "Mapping"
-Dim k As Long, rcd As Variant, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long
-For k = pairs.Count To 1 Step -1
-    rcd = pairs(k)
-    a = rcd(0): enFrom = rcd(1): enTo = rcd(2): deFrom = rcd(3): deTo = rcd(4)
-    Dim rowIx As Long: rowIx = pairs.Count - k + 2
-    tbl.Cell(rowIx, 1).Range.Text = JoinRange(EN, enFrom, enTo)
-    tbl.Cell(rowIx, 2).Range.Text = JoinRange(DE, deFrom, deTo)
-    tbl.Cell(rowIx, 3).Range.Text = enFrom & "-" & enTo & " ? " & deFrom & "-" & deTo
-Next
+    tbl.Cell(1, 1).Range.Text = "English Table"
+    tbl.Cell(1, 2).Range.Text = "German Table"
+    tbl.Cell(1, 3).Range.Text = "Mapping (Doc Table Index)"
+    
+    Dim k As Long, rcd As Variant
+    Dim enFrom As Long, enTo As Long, deFrom As Long, deTo As Long
+    Dim enIdxFrom As Long, enIdxTo As Long, deIdxFrom As Long, deIdxTo As Long
+    
+    Application.ScreenUpdating = False
+    
+    For k = pairs.Count To 1 Step -1
+        rcd = pairs(k)
+        a = rcd(0)
+        enFrom = rcd(1): enTo = rcd(2) ' These are the ARRAY indices
+        deFrom = rcd(3): deTo = rcd(4) ' These are the ARRAY indices
+        
+        Dim rowIx As Long: rowIx = pairs.Count - k + 2
+        
+        ' Copy the actual tables into the cells
+        CopyTablesToCell enDoc, EN, enFrom, enTo, tbl.Cell(rowIx, 1)
+        CopyTablesToCell deDoc, DE, deFrom, deTo, tbl.Cell(rowIx, 2)
+        
+        ' Get the *document* table indices for the mapping string
+        enIdxFrom = EN(enFrom).TableIndex
+        enIdxTo = EN(enTo).TableIndex
+        deIdxFrom = DE(deFrom).TableIndex
+        deIdxTo = DE(deTo).TableIndex
+        
+        ' Write the mapping
+        If enIdxFrom = 0 Then
+             tbl.Cell(rowIx, 3).Range.Text = "SKIP"
+        ElseIf deIdxFrom = 0 Then
+             tbl.Cell(rowIx, 3).Range.Text = "SKIP"
+        ElseIf enFrom = enTo And deFrom = deTo Then ' 1x1
+            tbl.Cell(rowIx, 3).Range.Text = enIdxFrom & "  ->  " & deIdxFrom
+        Else ' 1xN or Nx1
+            tbl.Cell(rowIx, 3).Range.Text = enIdxFrom & "-" & enIdxTo & "  ->  " & deIdxFrom & "-" & deIdxTo
+        End If
+    Next
 
-' Auto-fit table
-tbl.AutoFitBehavior wdAutoFitContent
-tbl.AutoFitBehavior wdAutoFitWindow
-
-MsgBox "Alignment complete. Table ready in new document.", vbInformation
+    ' --- 8. Cleanup ---
+    ' (Auto-fitting a table-of-tables is tricky, manual is better)
+    ' tbl.AutoFitBehavior wdAutoFitContent
+    
+    enDoc.Close SaveChanges:=False
+    deDoc.Close SaveChanges:=False
+    
+    Application.ScreenUpdating = True
+    MsgBox "Table alignment complete. Table ready in new document.", vbInformation
 End Sub
-
-Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
-    Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
-    Dim lenDE As Long: lenDE = SumLen(DE, dj1, dj2)
-    Dim dev As Double: dev = Abs(lenDE - lenEN * ratio)
-    AlignCost = dev ^ 0.9 + penalty
-End Function
-
-Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef backI() As Long, ByRef backJ() As Long, ni As Long, nj As Long, newCost As Double, action As Integer, pi As Long, pj As Long)
-    If newCost < cost(ni, nj) Then
-        cost(ni, nj) = newCost
-        backA(ni, nj) = action
-        backI(ni, nj) = pi
-        backJ(ni, nj) = pj
-    End If
-End Sub
-
-
-
