@@ -1,165 +1,257 @@
-from typing import List, Dict, Any, Tuple
+' ===== CONFIG =====
+Const ENABLE_DEFRAG As Boolean = True
+Const DEFRAG_MIN_CHARS As Long = 120
+Const DEFRAG_SENT_ENDS As String = ".?!:;)""]"
 
-# Type Alias for clarity
-ContentItem = Dict[str, Any]
-HeadingPair = Tuple[ContentItem, ContentItem]
-AlignedPair = Dict[str, Any] # The final output format for the evaluation pipeline
+Const PENALTY_1x2 As Double = 12#
+Const PENALTY_2x1 As Double = 12#
+Const PENALTY_2x2 As Double = 20#
+Const PENALTY_SKIP_BASE As Double = 120#
+Const PENALTY_SKIP_PER_CHAR As Double = 0.4
 
-def _find_content_between(
-    start_item: ContentItem, 
-    end_item: ContentItem, 
-    all_content: List[ContentItem]
-) -> str:
-    """
-    Finds and concatenates all content items between two items,
-    based on their character offsets.
-    
-    --- MODIFIED TO FIX THE "GAP" PROBLEM ---
-    This function now stops if it finds another 'rogue' heading
-    in the gap, preventing it from merging distinct sections.
-    """
-    start_offset = start_item['offset']
-    end_offset = end_item['offset']
-    
-    # 1. Find all content items that fall between the two offsets
-    content_items_found = [
-        item for item in all_content
-        if start_offset < item['offset'] < end_offset
-    ]
-    
-    if not content_items_found:
-        return ""
+' ========= UTILITIES =========
+Private Function CleanText(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, ChrW(160), " ")
+    t = Replace(t, vbTab, " ")
+    t = Replace(t, vbCr, " ")
+    t = Replace(t, vbLf, " ")
+    t = Replace(t, Chr(11), " ")
+    t = Replace(t, Chr(7), "")
+    Do While InStr(t, "  ") > 0
+        t = Replace(t, "  ", " ")
+    Loop
+    CleanText = Trim$(t)
+End Function
 
-    # 2. NEW: Check if any of these items are 'rogue' headings
-    rogue_headings = [
-        item for item in content_items_found
-        if item['type'] in {'title', 'sectionHeading'}
-    ]
+Private Function ParaLen(ByVal s As String) As Long
+    ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
+End Function
 
-    final_content_blocks = []
-    
-    if rogue_headings:
-        # 3. If we found rogue headings, only take content *before* the first one
-        first_rogue_heading_offset = rogue_headings[0]['offset']
-        
-        final_content_blocks = [
-            item['text'] for item in content_items_found
-            if item['offset'] < first_rogue_heading_offset
-        ]
-        # Log a warning that we stopped an alignment gap
-        print(f"  Warning: Found un-validated heading '{rogue_headings[0]['text'][:50]}...' "
-              f"between '{start_item['text'][:50]}...' and '{end_item['text'][:50]}...'. "
-              "Truncating section to prevent merging.")
-    else:
-        # 4. If no rogue headings, proceed as normal
-        final_content_blocks = [item['text'] for item in content_items_found]
-        
-    return "\n\n".join(final_content_blocks)
+Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Long
+    Dim i As Long, N As Long
+    For i = i1 To i2: N = N + ParaLen(arr(i)): Next
+    SumLen = N
+End Function
 
-def _find_content_after(
-    start_item: ContentItem,
-    all_content: List[ContentItem]
-) -> str:
-    """
-    --- NEW FUNCTION ---
-    Finds and concatenates all content items *after* the
-    last validated heading to the end of the document.
-    """
-    start_offset = start_item['offset']
-    
-    content_blocks = [
-        item['text'] for item in all_content
-        if item['offset'] > start_offset
-    ]
-    
-    return "\n\n".join(content_blocks)
+Private Function JoinRange(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As String
+    Dim i As Long, t As String
+    For i = i1 To i2
+        If Len(arr(i)) > 0 Then
+            If Len(t) > 0 Then
+                t = t & vbCrLf & arr(i)
+            Else
+                t = arr(i)
+            End If
+        End If
+    Next
+    JoinRange = t
+End Function
+
+Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolean
+    If Len(s) = 0 Then Exit Function
+    EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
+End Function
+
+Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
+    Dim p As Paragraph, tmp As New Collection, s As String
+    For Each p In doc.Paragraphs
+        s = CleanText(p.Range.Text)
+        If Len(s) > 0 Then tmp.Add s
+    Next
+    ReDim texts(1 To tmp.Count)
+    Dim i As Long
+    For i = 1 To tmp.Count: texts(i) = tmp(i): Next
+End Sub
+
+Private Sub DefragmentParas(ByRef arr() As String)
+    If Not ENABLE_DEFRAG Then Exit Sub
+    If UBound(arr) < 2 Then Exit Sub
+    Dim outCol As New Collection, i As Long, buf As String
+    For i = LBound(arr) To UBound(arr)
+        If Len(buf) = 0 Then
+            buf = arr(i)
+        Else
+            buf = buf & " " & arr(i)
+        End If
+        Dim enough As Boolean
+        enough = (ParaLen(buf) >= DEFRAG_MIN_CHARS) Or EndsWithAny(buf, DEFRAG_SENT_ENDS)
+        If enough Then outCol.Add Trim$(buf): buf = ""
+    Next
+    If Len(buf) > 0 Then outCol.Add Trim$(buf)
+    ReDim arr(1 To outCol.Count)
+    For i = 1 To outCol.Count: arr(i) = outCol(i): Next
+End Sub
+
+Private Function BrowseForFile(prompt As String) As String
+    Dim fd As FileDialog
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+    With fd
+        .Title = prompt
+        .Filters.Clear
+        .Filters.Add "PDF Files", "*.pdf"
+        .AllowMultiSelect = False
+        If .Show <> -1 Then Exit Function
+        BrowseForFile = .SelectedItems(1)
+    End With
+End Function
+
+Private Function ConvertPdfToDocx(pdfPath As String) As String
+    Dim doc As Document, docxPath As String
+    docxPath = Replace(pdfPath, ".pdf", ".docx")
+    Set doc = Documents.Open(FileName:=pdfPath, ConfirmConversions:=False, ReadOnly:=False)
+    doc.SaveAs2 FileName:=docxPath, FileFormat:=wdFormatXMLDocument
+    doc.Close SaveChanges:=False
+    ConvertPdfToDocx = docxPath
+End Function
+
+' ========= MAIN =========
+Public Sub AlignTranslatedParagraphs_AutoPick()
+    ' Browse for first PDF file
+    Dim enPDF As String
+    enPDF = BrowseForFile("Select the FIRST PDF file (e.g., English):")
+    If enPDF = "" Then
+        MsgBox "No file selected. Operation cancelled.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Browse for second PDF file
+    Dim dePDF As String
+    dePDF = BrowseForFile("Select the SECOND PDF file (e.g., German):")
+    If dePDF = "" Then
+        MsgBox "No file selected. Operation cancelled.", vbExclamation
+        Exit Sub
+    End If
+
+    MsgBox "Selected files:" & vbCrLf & "First: " & enPDF & vbCrLf & "Second: " & dePDF, vbInformation
+
+    ' Convert PDFs
+    Dim enDocx As String, deDocx As String
+    enDocx = ConvertPdfToDocx(enPDF)
+    deDocx = ConvertPdfToDocx(dePDF)
+    MsgBox "Converted to DOCX successfully." & vbCrLf & enDocx & vbCrLf & deDocx, vbInformation
+
+    ' Open
+    Dim enDoc As Document, deDoc As Document
+    Set enDoc = Documents.Open(enDocx, ReadOnly:=True)
+    Set deDoc = Documents.Open(deDocx, ReadOnly:=True)
+
+    ' Paragraphs
+    Dim EN() As String, DE() As String
+    CollectParagraphs enDoc, EN
+    CollectParagraphs deDoc, DE
+    DefragmentParas EN: DefragmentParas DE
+
+    ' Ratio
+    Dim i As Long, sumEN As Long, sumDE As Long
+    For i = LBound(EN) To UBound(EN): sumEN = sumEN + ParaLen(EN(i)): Next
+    For i = LBound(DE) To UBound(DE): sumDE = sumDE + ParaLen(DE(i)): Next
+    Dim r As Double
+    If sumEN > 0 Then
+        r = sumDE / sumEN
+    Else
+        r = 1#
+    End If
+
+    ' DP arrays
+    Dim N As Long, M As Long: N = UBound(EN): M = UBound(DE)
+    Dim cost() As Double, backA() As Integer, backI() As Long, backJ() As Long
+    ReDim cost(0 To N, 0 To M): ReDim backA(0 To N, 0 To M)
+    ReDim backI(0 To N, 0 To M): ReDim backJ(0 To N, 0 To M)
+    Dim INF As Double: INF = 1E+30
+    Dim j As Long
+    For i = 0 To N: For j = 0 To M: cost(i, j) = INF: Next: Next
+    cost(0, 0) = 0
+
+    Dim c As Double
+    For i = 0 To N
+        For j = 0 To M
+            If cost(i, j) < INF Then
+                ' 1x1 alignment
+                If i + 1 <= N And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 1, r, 0#)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 1, cost(i, j) + c, 1, i, j
+                End If
+                ' 1x2 alignment
+                If i + 1 <= N And j + 2 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 2, r, PENALTY_1x2)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 2, cost(i, j) + c, 2, i, j
+                End If
+                ' 2x1 alignment
+                If i + 2 <= N And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 1, r, PENALTY_2x1)
+                    UpdateCell cost, backA, backI, backJ, i + 2, j + 1, cost(i, j) + c, 3, i, j
+                End If
+                ' Skip EN paragraph
+                If i + 1 <= N Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(EN(i + 1))
+                    UpdateCell cost, backA, backI, backJ, i + 1, j, cost(i, j) + c, 5, i, j
+                End If
+                ' Skip DE paragraph
+                If j + 1 <= M Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(DE(j + 1))
+                    UpdateCell cost, backA, backI, backJ, i, j + 1, cost(i, j) + c, 6, i, j
+                End If
+            End If
+        Next
+    Next
+
+    ' Backtrack
+    Dim pairs As New Collection, i1 As Long: i1 = N
+    Dim j1 As Long: j1 = M
+    Do While Not (i1 = 0 And j1 = 0)
+        Dim a As Integer, pi As Long, pj As Long, rec As Variant
+        a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
+        rec = Array(a, pi + 1, i1, pj + 1, j1)
+        pairs.Add rec
+        i1 = pi: j1 = pj
+    Loop
+
+    ' Close source documents
+    enDoc.Close SaveChanges:=False
+    deDoc.Close SaveChanges:=False
+
+    ' Output table
+    Dim outDoc As Document: Set outDoc = Documents.Add
+    Dim rows As Long: rows = pairs.Count + 1
+    Dim tbl As Table
+    Set tbl = outDoc.Tables.Add(Range:=outDoc.Range(0, 0), NumRows:=rows, NumColumns:=3)
+    tbl.Style = "Table Grid"
+    tbl.Cell(1, 1).Range.Text = "English"
+    tbl.Cell(1, 2).Range.Text = "German"
+    tbl.Cell(1, 3).Range.Text = "Mapping"
+Dim k As Long, rcd As Variant, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long
+For k = pairs.Count To 1 Step -1
+    rcd = pairs(k)
+    a = rcd(0): enFrom = rcd(1): enTo = rcd(2): deFrom = rcd(3): deTo = rcd(4)
+    Dim rowIx As Long: rowIx = pairs.Count - k + 2
+    tbl.Cell(rowIx, 1).Range.Text = JoinRange(EN, enFrom, enTo)
+    tbl.Cell(rowIx, 2).Range.Text = JoinRange(DE, deFrom, deTo)
+    tbl.Cell(rowIx, 3).Range.Text = enFrom & "-" & enTo & " ? " & deFrom & "-" & deTo
+Next
+
+' Auto-fit table
+tbl.AutoFitBehavior wdAutoFitContent
+tbl.AutoFitBehavior wdAutoFitWindow
+
+MsgBox "Alignment complete. Table ready in new document.", vbInformation
+End Sub
+
+Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
+    Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
+    Dim lenDE As Long: lenDE = SumLen(DE, dj1, dj2)
+    Dim dev As Double: dev = Abs(lenDE - lenEN * ratio)
+    AlignCost = dev ^ 0.9 + penalty
+End Function
+
+Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef backI() As Long, ByRef backJ() As Long, ni As Long, nj As Long, newCost As Double, action As Integer, pi As Long, pj As Long)
+    If newCost < cost(ni, nj) Then
+        cost(ni, nj) = newCost
+        backA(ni, nj) = action
+        backI(ni, nj) = pi
+        backJ(ni, nj) = pj
+    End If
+End Sub
 
 
-def create_section_pairs(
-    validated_heading_pairs: List[HeadingPair],
-    full_english_content: List[ContentItem],
-    full_german_content: List[ContentItem]
-) -> List[AlignedPair]:
-    """
-    Main orchestration function for Phase 2:
-    Uses the validated heading pairs as 'anchors' to extract
-    all content *between* them.
-    
-    --- MODIFIED ---
-    Now correctly handles gaps and processes content after the
-    final heading.
-    """
-    if not validated_heading_pairs:
-        return []
 
-    print(f"Creating content sections from {len(validated_heading_pairs)} validated heading pairs...")
-    
-    final_aligned_pairs: List[AlignedPair] = []
-    
-    # --- 1. Iterate through all consecutive pairs of headings ---
-    for i in range(len(validated_heading_pairs) - 1):
-        # Current pair (A)
-        eng_heading_A, ger_heading_A = validated_heading_pairs[i]
-        
-        # Next pair (B)
-        eng_heading_B, ger_heading_B = validated_heading_pairs[i+1]
-        
-        # Extract content between A and B for English
-        eng_section_text = _find_content_between(
-            eng_heading_A, 
-            eng_heading_B, 
-            full_english_content
-        )
-        
-        # Extract content between A and B for German
-        ger_section_text = _find_content_between(
-            ger_heading_A, 
-            ger_heading_B, 
-            full_german_content
-        )
-        
-        # We append all sections, even if both are empty
-        # (for back-to-back subheadings)
-        final_aligned_pairs.append({
-            "english": {
-                "text": eng_section_text,
-                "type": "section",
-                "page": eng_heading_A['page'] # Use start heading page as reference
-            },
-            "german": {
-                "text": ger_section_text,
-                "type": "section",
-                "page": ger_heading_A['page']
-            },
-            "similarity": 0.0, # Not applicable in this model
-            "margin_score": 0.0 # Not applicable in this model
-        })
-
-    # --- 2. NEW: Process content *after* the last heading ---
-    # This fixes the "End-of-Document" Omission flaw
-    
-    print("Processing content after the final validated heading...")
-    last_eng_heading, last_ger_heading = validated_heading_pairs[-1]
-    
-    eng_final_section = _find_content_after(last_eng_heading, full_english_content)
-    ger_final_section = _find_content_after(last_ger_heading, full_german_content)
-
-    if eng_final_section or ger_final_section:
-        final_aligned_pairs.append({
-            "english": {
-                "text": eng_final_section,
-                "type": "section",
-                "page": last_eng_heading['page']
-            },
-            "german": {
-                "text": ger_final_section,
-                "type": "section",
-                "page": last_ger_heading['page']
-            },
-            "similarity": 0.0,
-            "margin_score": 0.0
-        })
-
-    # This number should now be len(validated_heading_pairs)
-    print(f"Created {len(final_aligned_pairs)} final section pairs for evaluation.")
-    return final_aligned_pairs
