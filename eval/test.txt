@@ -1,216 +1,165 @@
-import json
 from typing import List, Dict, Any, Tuple
-import numpy as np
-from scipy.optimize import linear_sum_assignment
-from sklearn.metrics.pairwise import cosine_similarity
-from tqdm import tqdm
-
-# Import clients and report writers
-from src.clients.azure_client import get_embeddings, chat
-from src.reporting.excel_writer import (
-    save_raw_headings_report, 
-    save_matched_headings_report,
-    save_validated_headings_report
-)
-
-# --- ADD THIS IMPORT ---
-import config
 
 # Type Alias for clarity
 ContentItem = Dict[str, Any]
 HeadingPair = Tuple[ContentItem, ContentItem]
+AlignedPair = Dict[str, Any] # The final output format for the evaluation pipeline
 
-def _validate_heading_pair(eng_heading: str, ger_heading: str) -> bool:
+def _find_content_between(
+    start_item: ContentItem, 
+    end_item: ContentItem, 
+    all_content: List[ContentItem]
+) -> str:
     """
-    Uses a 'liberal' LLM prompt to check if two headings are plausible translations.
-    """
-    prompt = f"""
-## ROLE
-You are a fast, liberal document analyst. Your goal is to check if two section headings *could* plausibly refer to the same section, even if they aren't exact translations.
-
-## TASK
-Compare the English and German headings. Respond with a single JSON object containing one key, "match", with a value of "Yes" or "No".
-
-## RULES
-- Respond "Yes" if they are clear translations (e.g., "Board Report" -> "Bericht des Vorstands").
-- Respond "Yes" if they refer to the same concept (e.g., "Corporate Governance" -> "Erklärung zur Unternehmensführung").
-- Respond "Yes" if one is a summary of the other (e.g., "Notes to the Financial Statements" -> "Anhang").
-- Respond "No" *only* if they are clearly about different topics (e.g., "Risk Report" -> "Human Resources").
-
-## HEADINGS
-<English>
-{eng_heading}
-</English>
-
-<German>
-{ger_heading}
-</German>
-
-## RESPONSE (JSON ONLY)
-{{ "match": "Yes" | "No" }}
-"""
-    try:
-        content = chat(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-        ).strip()
-        
-        j0, j1 = content.find("{"), content.rfind("}") + 1
-        result = json.loads(content[j0:j1])
-        return result.get("match", "No").lower() == "yes"
-        
-    except Exception as e:
-        print(f"Warning: Heading validation LLM call failed. Defaulting to 'No'. Error: {e}")
-        return False
-
-def match_and_validate_headings(
-    english_content: List[ContentItem],
-    german_content: List[ContentItem],
-    eng_start_page: int,
-    ger_start_page: int,
-    output_dir: Any, # Expects a Path object
-    base_filename: str
-) -> List[HeadingPair]:
-    """
-    Main orchestration function for Phase 1:
-    1. Filters for headings after the start page.
-    2. Gets embeddings and matches them using the Hungarian algorithm.
-    3. Validates all matches using an LLM.
-    4. Saves debug reports at each step.
-    """
+    Finds and concatenates all content items between two items,
+    based on their character offsets.
     
-    # 1. Filter for headings *after* the specified start page
-    print(f"Filtering headings. EN start page: {eng_start_page}, DE start page: {ger_start_page}")
-    eng_headings = [
-        item for item in english_content 
-        if item['type'] in {'title', 'sectionHeading'} and item['page'] >= eng_start_page
-    ]
-    ger_headings = [
-        item for item in german_content 
-        if item['type'] in {'title', 'sectionHeading'} and item['page'] >= ger_start_page
+    --- MODIFIED TO FIX THE "GAP" PROBLEM ---
+    This function now stops if it finds another 'rogue' heading
+    in the gap, preventing it from merging distinct sections.
+    """
+    start_offset = start_item['offset']
+    end_offset = end_item['offset']
+    
+    # 1. Find all content items that fall between the two offsets
+    content_items_found = [
+        item for item in all_content
+        if start_offset < item['offset'] < end_offset
     ]
     
-    if not eng_headings or not ger_headings:
-        print("Error: No headings found after the start page in one or both documents.")
+    if not content_items_found:
+        return ""
+
+    # 2. NEW: Check if any of these items are 'rogue' headings
+    rogue_headings = [
+        item for item in content_items_found
+        if item['type'] in {'title', 'sectionHeading'}
+    ]
+
+    final_content_blocks = []
+    
+    if rogue_headings:
+        # 3. If we found rogue headings, only take content *before* the first one
+        first_rogue_heading_offset = rogue_headings[0]['offset']
+        
+        final_content_blocks = [
+            item['text'] for item in content_items_found
+            if item['offset'] < first_rogue_heading_offset
+        ]
+        # Log a warning that we stopped an alignment gap
+        print(f"  Warning: Found un-validated heading '{rogue_headings[0]['text'][:50]}...' "
+              f"between '{start_item['text'][:50]}...' and '{end_item['text'][:50]}...'. "
+              "Truncating section to prevent merging.")
+    else:
+        # 4. If no rogue headings, proceed as normal
+        final_content_blocks = [item['text'] for item in content_items_found]
+        
+    return "\n\n".join(final_content_blocks)
+
+def _find_content_after(
+    start_item: ContentItem,
+    all_content: List[ContentItem]
+) -> str:
+    """
+    --- NEW FUNCTION ---
+    Finds and concatenates all content items *after* the
+    last validated heading to the end of the document.
+    """
+    start_offset = start_item['offset']
+    
+    content_blocks = [
+        item['text'] for item in all_content
+        if item['offset'] > start_offset
+    ]
+    
+    return "\n\n".join(content_blocks)
+
+
+def create_section_pairs(
+    validated_heading_pairs: List[HeadingPair],
+    full_english_content: List[ContentItem],
+    full_german_content: List[ContentItem]
+) -> List[AlignedPair]:
+    """
+    Main orchestration function for Phase 2:
+    Uses the validated heading pairs as 'anchors' to extract
+    all content *between* them.
+    
+    --- MODIFIED ---
+    Now correctly handles gaps and processes content after the
+    final heading.
+    """
+    if not validated_heading_pairs:
         return []
 
-    # Save debug report 1: Raw Headings
-    save_raw_headings_report(eng_headings, ger_headings, output_dir / f"headings_0_raw_{base_filename}.xlsx")
-
-    # 2. Get Embeddings
-    print("Getting embeddings for headings...")
-    eng_heading_texts = [h['text'] for h in eng_headings]
-    ger_heading_texts = [h['text'] for h in ger_headings]
+    print(f"Creating content sections from {len(validated_heading_pairs)} validated heading pairs...")
     
-    eng_embeddings = np.array(get_embeddings(eng_heading_texts))
-    ger_embeddings = np.array(get_embeddings(ger_heading_texts))
+    final_aligned_pairs: List[AlignedPair] = []
     
-    # --- 3. MODIFIED COST MATRIX CALCULATION ---
-    print("Calculating weighted semantic and proximity costs...")
-
-    # 3a. Semantic Cost (Normalized 0-1)
-    # Cosine similarity is [-1, 1].
-    # (1 - similarity) is [0, 2].
-    # (1 - similarity) / 2 is [0, 1].
-    # Cost = 0 is a perfect semantic match.
-    similarity_matrix = cosine_similarity(eng_embeddings, ger_embeddings)
-    semantic_cost_matrix = (1.0 - similarity_matrix) / 2.0
-    
-    # 3b. Proximity Cost (Normalized 0-1)
-    eng_pages = np.array([h['page'] for h in eng_headings])
-    ger_pages = np.array([h['page'] for h in ger_headings])
-    
-    # Create a matrix of absolute page differences [len(eng_headings) x len(ger_headings)]
-    page_diff_matrix = np.abs(eng_pages[:, np.newaxis] - ger_pages[np.newaxis, :])
-    
-    # Normalize the page difference to a 0-1 scale
-    # (Use the max page number from either doc as the normalizer)
-    max_possible_page_diff = max(np.max(eng_pages), np.max(ger_pages))
-    # Add 1e-6 to avoid division by zero if all headings are on one page
-    proximity_cost_matrix = page_diff_matrix / (max_possible_page_diff + 1e-6)
-
-    # 3c. Final Weighted Cost Matrix
-    # We use the weights from config.py
-    if config.W_PROXIMITY == 0:
-        print("Warning: config.W_PROXIMITY is 0. Page proximity will not be considered.")
-    
-    cost_matrix = (
-        (config.W_SEMANTIC * semantic_cost_matrix) +
-        (config.W_PROXIMITY * proximity_cost_matrix)
-    )
-    
-    print("Running Hungarian algorithm with weighted cost...")
-    row_indices, col_indices = linear_sum_assignment(cost_matrix)
-    # --- END OF MODIFICATION ---
-    
-    # 4. Create initial matched list and save debug report 2
-    matched_pairs = []
-    unmatched_eng = list(range(len(eng_headings)))
-    unmatched_ger = list(range(len(ger_headings)))
-
-    for eng_idx, ger_idx in zip(row_indices, col_indices):
-        similarity = similarity_matrix[eng_idx, ger_idx]
-        # --- Store the component costs for debugging ---
-        semantic_cost = semantic_cost_matrix[eng_idx, ger_idx]
-        proximity_cost = proximity_cost_matrix[eng_idx, ger_idx]
-        total_cost = cost_matrix[eng_idx, ger_idx]
-
-        matched_pairs.append({
-            "english": eng_headings[eng_idx],
-            "german": ger_headings[ger_idx],
-            "similarity": similarity,
-            # --- Add new fields for the report ---
-            "semantic_cost": semantic_cost,
-            "proximity_cost": proximity_cost,
-            "total_cost": total_cost
-        })
-        if eng_idx in unmatched_eng:
-            unmatched_eng.remove(eng_idx)
-        if ger_idx in unmatched_ger:
-            unmatched_ger.remove(ger_idx)
-            
-    # Add unmatched items for the report
-    for eng_idx in unmatched_eng:
-        matched_pairs.append({"english": eng_headings[eng_idx], "german": None, "similarity": 0.0})
-    for ger_idx in unmatched_ger:
-        matched_pairs.append({"english": None, "german": ger_headings[ger_idx], "similarity": 0.0})
-
-    save_matched_headings_report(matched_pairs, output_dir / f"headings_1_matched_{base_filename}.xlsx")
-
-    # 5. Validate pairs using LLM
-    print(f"Validating {len(row_indices)} matched pairs with LLM...")
-    validated_pairs: List[HeadingPair] = []
-    
-    for pair in tqdm(matched_pairs, desc="Validating Headings"):
-        eng_item = pair.get('english')
-        ger_item = pair.get('german')
+    # --- 1. Iterate through all consecutive pairs of headings ---
+    for i in range(len(validated_heading_pairs) - 1):
+        # Current pair (A)
+        eng_heading_A, ger_heading_A = validated_heading_pairs[i]
         
-        # Only validate actual pairs
-        if eng_item and ger_item:
-            # --- MODIFICATION: Only validate if the cost is not excessively high ---
-            # This saves money by not asking the LLM to validate absurd matches
-            # (e.g., page 5 to page 100) that the algorithm was forced to make.
-            # We check if the proximity cost is > 0.5 (i.e., halfway through the doc)
-            # You can adjust this threshold.
-            if pair.get('proximity_cost', 0.0) > 0.5 and config.W_PROXIMITY > 0:
-                 pair['is_valid'] = False
-                 pair['validation_skipped'] = True # Add a flag for the report
-                 continue # Skip this pair
+        # Next pair (B)
+        eng_heading_B, ger_heading_B = validated_heading_pairs[i+1]
+        
+        # Extract content between A and B for English
+        eng_section_text = _find_content_between(
+            eng_heading_A, 
+            eng_heading_B, 
+            full_english_content
+        )
+        
+        # Extract content between A and B for German
+        ger_section_text = _find_content_between(
+            ger_heading_A, 
+            ger_heading_B, 
+            full_german_content
+        )
+        
+        # We append all sections, even if both are empty
+        # (for back-to-back subheadings)
+        final_aligned_pairs.append({
+            "english": {
+                "text": eng_section_text,
+                "type": "section",
+                "page": eng_heading_A['page'] # Use start heading page as reference
+            },
+            "german": {
+                "text": ger_section_text,
+                "type": "section",
+                "page": ger_heading_A['page']
+            },
+            "similarity": 0.0, # Not applicable in this model
+            "margin_score": 0.0 # Not applicable in this model
+        })
 
-            is_valid = _validate_heading_pair(eng_item['text'], ger_item['text'])
-            pair['is_valid'] = is_valid
-            if is_valid:
-                # Add the tuple of full ContentItems
-                validated_pairs.append((eng_item, ger_item))
-        else:
-            pair['is_valid'] = False
-
-    # Save debug report 3: Validated Headings
-    save_validated_headings_report(matched_pairs, output_dir / f"headings_2_validated_{base_filename}.xlsx")
-
-    print(f"Found {len(validated_pairs)} validated heading pairs.")
+    # --- 2. NEW: Process content *after* the last heading ---
+    # This fixes the "End-of-Document" Omission flaw
     
-    # Sort by English document order before returning
-    validated_pairs.sort(key=lambda pair: pair[0]['offset'])
+    print("Processing content after the final validated heading...")
+    last_eng_heading, last_ger_heading = validated_heading_pairs[-1]
     
-    return validated_pairs
+    eng_final_section = _find_content_after(last_eng_heading, full_english_content)
+    ger_final_section = _find_content_after(last_ger_heading, full_german_content)
+
+    if eng_final_section or ger_final_section:
+        final_aligned_pairs.append({
+            "english": {
+                "text": eng_final_section,
+                "type": "section",
+                "page": last_eng_heading['page']
+            },
+            "german": {
+                "text": ger_final_section,
+                "type": "section",
+                "page": last_ger_heading['page']
+            },
+            "similarity": 0.0,
+            "margin_score": 0.0
+        })
+
+    # This number should now be len(validated_heading_pairs)
+    print(f"Created {len(final_aligned_pairs)} final section pairs for evaluation.")
+    return final_aligned_pairs
