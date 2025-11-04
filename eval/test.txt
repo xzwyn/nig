@@ -3,7 +3,8 @@ Option Explicit
 '==================== CONFIG ====================
 Private Const ENABLE_DEFRAG As Boolean = True
 Private Const DEFRAG_MIN_CHARS As Long = 140
-Private Const DEFRAG_SENT_ENDS As String = ".?!:;)""]”’"
+' REFINED: Added straight quotes and guillemets for broader language support
+Private Const DEFRAG_SENT_ENDS As String = ".?!:;)""]”’'" & "«»"
 
 Private Const PENALTY_1x2 As Double = 12#
 Private Const PENALTY_2x1 As Double = 12#
@@ -11,31 +12,42 @@ Private Const PENALTY_2x2 As Double = 22#
 Private Const PENALTY_SKIP_BASE As Double = 120#
 Private Const PENALTY_SKIP_PER_CHAR As Double = 0.35
 
-Private Const REPEAT_LINE_MAX_LEN As Long = 70     ' candidates for running headers/footers
-Private Const REPEAT_MIN_COUNT As Long = 3         ' drop if appears >=3 times
-Private SOFT_HYPHEN As String   ' U+00AD
+Private Const REPEAT_LINE_MAX_LEN As Long = 70      ' candidates for running headers/footers
+Private Const REPEAT_MIN_COUNT As Long = 3          ' drop if appears >=3 times
+
+' REFINED: Defined as a module-level constant, initialized once.
+Private Const SOFT_HYPHEN As String = ChrW(&HAD)    ' U+00AD
+
+' REFINED: Module-level object for performance. Created once.
+Private re As Object
 
 '==================== UTILITIES ====================
 Private Function RxTest(ByVal text As String, ByVal pattern As String) As Boolean
-    Static re As Object: Set re = CreateObject("VBScript.RegExp")
-    With re
-        .Global = False: .Multiline = False: .IgnoreCase = True
-        .pattern = pattern
-    End With
+    ' REFINED: Creates the RegExp object only once for the entire session.
+    If re Is Nothing Then
+        Set re = CreateObject("VBScript.RegExp")
+        With re
+            .Global = False
+            .Multiline = False
+            .IgnoreCase = True
+        End With
+    End If
+    
+    re.pattern = pattern
     On Error Resume Next
     RxTest = re.Test(text)
 End Function
 
 Private Function CleanText(ByVal s As String) As String
-    SOFT_HYPHEN = ChrW(&HAD)
     Dim t As String
     t = s
     ' Normalize whitespace & control
     t = Replace(t, ChrW(160), " ")
-    t = Replace(t, SOFT_HYPHEN, "")                ' strip soft hyphen from PDF reflow
+    t = Replace(t, SOFT_HYPHEN, "")                  ' strip soft hyphen from PDF reflow
     t = Replace(t, vbTab, " ")
     t = Replace(t, Chr(11), " ")
     t = Replace(t, Chr(7), "")
+    
     ' Common PDF artifacts at line starts
     t = Trim$(t)
     If Left$(t, 2) = "/ " Then t = Mid$(t, 3)
@@ -44,14 +56,20 @@ Private Function CleanText(ByVal s As String) As String
     ' Normalize dashes (en/em) to hyphen for stable counting
     t = Replace(t, "–", "-")
     t = Replace(t, "—", "-")
-    ' Hyphenation healing (when Word preserved CR/LF inside paragraph text)
+    
+    ' REFINED: Hyphenation healing (now includes vbCrLf)
+    t = Replace(t, "- " & vbCrLf, "")
+    t = Replace(t, "-" & vbCrLf, "")
     t = Replace(t, "- " & vbCr, "")
     t = Replace(t, "-" & vbCr, "")
+    t = Replace(t, "- " & vbLf, "")
     t = Replace(t, "-" & vbLf, "")
 
     ' Squash CR/LF to spaces
     t = Replace(t, vbCr, " ")
     t = Replace(t, vbLf, " ")
+    
+    ' Squash multiple spaces
     Do While InStr(t, "  ") > 0
         t = Replace(t, "  ", " ")
     Loop
@@ -68,7 +86,7 @@ Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As 
     SumLen = n
 End Function
 
-Private Function JoinRange(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As String
+Private Function JoinRange(arr() AsString, ByVal i1 As Long, ByVal i2 As Long) As String
     Dim i As Long, t As String
     For i = i1 To i2
         If Len(arr(i)) > 0 Then
@@ -94,16 +112,14 @@ Private Function LooksLikeTitleCase(ByVal s As String) As Boolean
             If Mid$(w, 1, 1) = UCase$(Mid$(w, 1, 1)) Then titled = titled + 1
         End If
     Next
-    LooksLikeTitleCase = (total >= 2 And titled >= total - 1) ' tolerate a stopword
+    ' Tolerate a stopword
+    LooksLikeTitleCase = (total >= 2 And titled >= total - 1)
 End Function
 
 Private Sub CountShortLines(ByRef arr() As String, ByRef drop As Object)
     ' Builds frequency of short lines and flags those appearing >= REPEAT_MIN_COUNT
     Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
-    Dim i As Long
-    Dim key As String
-    Dim k As Variant
-
+    Dim i As Long, key As String, k As Variant
     For i = LBound(arr) To UBound(arr)
         key = arr(i)
         If Len(key) > 0 And Len(key) <= REPEAT_LINE_MAX_LEN Then
@@ -114,41 +130,32 @@ Private Sub CountShortLines(ByRef arr() As String, ByRef drop As Object)
             End If
         End If
     Next i
-
     Set drop = CreateObject("Scripting.Dictionary")
-    For Each k In dict.Keys          ' k is Variant
+    For Each k In dict.Keys
         If CLng(dict(k)) >= REPEAT_MIN_COUNT Then drop.Add k, True
     Next k
 End Sub
 
 
 Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
-    Dim p As Object
-    Dim tmp As New Collection
-    Dim s As String
-    Dim i As Long
-
+    Dim p As Object, tmp As New Collection, s As String, i As Long
     For Each p In doc.Paragraphs
-        s = CleanText(p.Range.text)
-        If Len(s) > 0 Then
-            tmp.Add s
-        End If
+        s = CleanText(p.Range.Text)
+        If Len(s) > 0 Then tmp.Add s
     Next p
-
     If tmp.Count = 0 Then
-        ReDim texts(1 To 1)
-        texts(1) = ""
+        ReDim texts(1 To 1): texts(1) = ""
     Else
         ReDim texts(1 To tmp.Count)
-        For i = 1 To tmp.Count
-            texts(i) = tmp(i)
-        Next i
+        For i = 1 To tmp.Count: texts(i) = tmp(i): Next i
     End If
 End Sub
 
 Private Sub DropRepeatingShortLines(ByRef arr() As String)
     Dim toDrop As Object: Call CountShortLines(arr, toDrop)
     If toDrop Is Nothing Then Exit Sub
+    If toDrop.Count = 0 Then Exit Sub
+    
     Dim outCol As New Collection, i As Long, s As String
     For i = LBound(arr) To UBound(arr)
         s = arr(i)
@@ -156,7 +163,10 @@ Private Sub DropRepeatingShortLines(ByRef arr() As String)
             outCol.Add s
         End If
     Next
-    If outCol.Count = 0 Then Exit Sub
+    If outCol.Count = 0 Then
+        ReDim arr(1 To 1): arr(1) = ""
+        Exit Sub
+    End If
     ReDim arr(1 To outCol.Count)
     For i = 1 To outCol.Count: arr(i) = outCol(i): Next
 End Sub
@@ -167,17 +177,22 @@ Private Sub DefragmentParas(ByRef arr() As String)
     Dim outCol As New Collection, i As Long, buf As String, enough As Boolean, s As String, isHeading As Boolean
     For i = LBound(arr) To UBound(arr)
         s = arr(i)
+        ' Heuristic for headings
         isHeading = (ParaLen(s) < 40) And (s = UCase$(s) Or LooksLikeTitleCase(s))
         If isHeading Then
+            ' Flush buffer before adding heading
             If Len(buf) > 0 Then outCol.Add Trim$(buf): buf = ""
-            outCol.Add s
+            outCol.Add s ' Add heading as its own item
         Else
+            ' Append to buffer
             If Len(buf) = 0 Then buf = s Else buf = buf & " " & s
             enough = (ParaLen(buf) >= DEFRAG_MIN_CHARS) Or EndsWithAny(buf, DEFRAG_SENT_ENDS)
             If enough Then outCol.Add Trim$(buf): buf = ""
         End If
     Next
+    ' Flush final buffer
     If Len(buf) > 0 Then outCol.Add Trim$(buf)
+    
     ReDim arr(1 To outCol.Count)
     For i = 1 To outCol.Count: arr(i) = outCol(i): Next
 End Sub
@@ -222,18 +237,28 @@ Private Function OpenAsDocx(path As String) As Document
     End If
 End Function
 
-Private Sub ColorRow(ByVal cell As cell, ByVal action As Integer)
+Private Sub ColorRow(ByVal r As Row, ByVal action As Integer)
+    ' REFINED: Colors the entire row's background for better readability
+    '          Uses Shading instead of Highlight, which is cleaner
     On Error Resume Next
+    Dim c As Cell, clr As WdColor
+    
     Select Case action
         Case 1 ' 1x1
-            cell.Range.HighlightColorIndex = wdNoHighlight
+            clr = wdColorAutomatic ' No color
         Case 2, 3 ' 1x2 or 2x1
-            cell.Range.HighlightColorIndex = wdYellow
+            clr = wdColorYellow
         Case 4 ' 2x2
-            cell.Range.HighlightColorIndex = wdTurquoise
+            clr = wdColorTurquoise
         Case 5, 6 ' skips
-            cell.Range.HighlightColorIndex = wdBrightGreen
+            clr = wdColorBrightGreen
+        Case Else
+            clr = wdColorAutomatic
     End Select
+
+    For Each c In r.Cells
+        c.Shading.BackgroundPatternColor = clr
+    Next c
 End Sub
 
 '==================== MAIN ====================
@@ -280,12 +305,7 @@ Public Sub Align_EN_DE_ToTable()
     Dim INF As Double: INF = 1E+30
     Dim j As Long
     For i = 0 To n
-        For j = 0 To M
-            cost(i, j) = INF
-            backA(i, j) = 0
-            backI(i, j) = 0
-            backJ(i, j) = 0
-        Next j
+        For j = 0 To M: cost(i, j) = INF: Next j
     Next i
     cost(0, 0) = 0
 
@@ -327,35 +347,39 @@ Public Sub Align_EN_DE_ToTable()
         Next j
     Next i
 
-    ' Backtrack (with fail-safe)
+    ' Backtrack
     Dim pairs As New Collection, i1 As Long, j1 As Long, rec As Variant, a As Integer, pi As Long, pj As Long
     i1 = n: j1 = M
-    If cost(i1, j1) >= INF Then
-        ' Fail-safe: stitch trailing tails greedily as 1x1 until one side ends
-        Do While i1 > 0 And j1 > 0
-            rec = Array(1, i1, i1, j1, j1)
-            pairs.Add rec
-            i1 = i1 - 1: j1 = j1 - 1
-        Loop
-        ' Prepend any leftovers as skips
-        Do While i1 > 0
-            rec = Array(5, i1, i1, j1 + 1, j1)
-            pairs.Add rec
-            i1 = i1 - 1
-        Loop
-        Do While j1 > 0
-            rec = Array(6, i1 + 1, i1, j1, j1)
-            pairs.Add rec
-            j1 = j1 - 1
-        Loop
-    Else
-        Do While Not (i1 = 0 And j1 = 0)
-            a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
-            rec = Array(a, IIf(pi + 1 <= i1, pi + 1, i1), i1, IIf(pj + 1 <= j1, pj + 1, j1), j1)
-            pairs.Add rec
-            i1 = pi: j1 = pj
-        Loop
+    
+    ' Check for fail-safe (DP didn't reach the end)
+    If cost(i1, j1) >= INF And n > 0 And M > 0 Then
+        ' Find the last reachable good cell
+        Dim max_k As Double, best_i As Long, best_j As Long
+        max_k = -1
+        For i = 0 To n
+            For j = 0 To M
+                If cost(i, j) < INF Then
+                    If i + j > max_k Then
+                        max_k = i + j
+                        best_i = i
+                        best_j = j
+                    End If
+                End If
+            Next
+        Next
+        i1 = best_i
+        j1 = best_j
     End If
+    
+    ' Normal Backtrack from (i1, j1)
+    Do While Not (i1 = 0 And j1 = 0)
+        a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
+        ' BUG FIX: Reverted to the simpler, correct logic.
+        ' The `IIf` logic was incorrect for skip cases.
+        rec = Array(a, pi + 1, i1, pj + 1, j1)
+        pairs.Add rec
+        i1 = pi: j1 = pj
+    Loop
 
     enDoc.Close False: deDoc.Close False
 
@@ -364,26 +388,39 @@ Public Sub Align_EN_DE_ToTable()
     Dim rows As Long: rows = pairs.Count + 1
     Dim tbl As Table
     Set tbl = outDoc.Tables.Add(Range:=outDoc.Range(0, 0), NumRows:=rows, NumColumns:=3)
+    tbl.Style = "Table Grid"
     tbl.AutoFitBehavior wdAutoFitWindow
-    tbl.cell(1, 1).Range.text = "English"
-    tbl.cell(1, 2).Range.text = "German"
-    tbl.cell(1, 3).Range.text = "Mapping"
+    
+    With tbl.Rows(1)
+        .Range.Font.Bold = True
+        .Shading.BackgroundPatternColor = wdColorGray15
+        .Cells(1).Range.Text = "English"
+        .Cells(2).Range.Text = "German"
+        .Cells(3).Range.Text = "Mapping"
+    End With
 
     Dim k As Long, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long, rowIx As Long, action As Integer
     For k = pairs.Count To 1 Step -1
         rec = pairs(k)
         action = rec(0): enFrom = rec(1): enTo = rec(2): deFrom = rec(3): deTo = rec(4)
         rowIx = pairs.Count - k + 2
-        tbl.cell(rowIx, 1).Range.text = JoinRange(EN, enFrom, enTo)
-        tbl.cell(rowIx, 2).Range.text = JoinRange(DE, deFrom, deTo)
-        tbl.cell(rowIx, 3).Range.text = CStr(enFrom) & "-" & enTo & " ? " & deFrom & "-" & deTo & " [a=" & action & "]"
-        Call ColorRow(tbl.cell(rowIx, 3), action)
+        
+        tbl.Rows(rowIx).Cells(1).Range.Text = JoinRange(EN, enFrom, enTo)
+        tbl.Rows(rowIx).Cells(2).Range.Text = JoinRange(DE, deFrom, deTo)
+        tbl.Rows(rowIx).Cells(3).Range.Text = CStr(enFrom) & "-" & enTo & " ? " & deFrom & "-" & deTo
+        
+        ' REFINED: Color the *entire row*
+        Call ColorRow(tbl.Rows(rowIx), action)
     Next
+    
+    tbl.AutoFitBehavior wdAutoFitContent
+    tbl.AutoFitBehavior wdAutoFitWindow
 
     MsgBox "Alignment complete.", vbInformation
 
 CleanExit:
     Application.ScreenUpdating = True
+    Set re = Nothing ' Clean up module-level object
     Exit Sub
 
 CleanFail:
@@ -392,6 +429,5 @@ CleanFail:
     On Error Resume Next
     If Not enDoc Is Nothing Then enDoc.Close False
     If Not deDoc Is Nothing Then deDoc.Close False
+    Set re = Nothing ' Clean up module-level object
 End Sub
-
-
