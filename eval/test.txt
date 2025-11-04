@@ -1,19 +1,397 @@
-' ===== DATA STRUCTURE =====
-' Holds the "fingerprint" of each table
-Private Type TableSignature
-    TableIndex As Long  ' The table's order in the document (e.g., 1st table, 2nd table)
-    RowCount As Long
-    ColumnCount As Long
-    CharCount As Long   ' Total characters in the table
-End Type
+Option Explicit
 
-' Holds the combined "fingerprint" of a *range* of tables (e.g., tables 2 and 3)
-Private Type CombinedSignature
-    RowCount As Long
-    ColumnCount As Long
-    CharCount As Long
-End Type
+'==================== CONFIG ====================
+Private Const ENABLE_DEFRAG As Boolean = True
+Private Const DEFRAG_MIN_CHARS As Long = 140
+Private Const DEFRAG_SENT_ENDS As String = ".?!:;)""]”’"
 
-' ===== CONFIG =====
-' --- Alignment Penalties ---
-' (...rest of the config constants...)
+Private Const PENALTY_1x2 As Double = 12#
+Private Const PENALTY_2x1 As Double = 12#
+Private Const PENALTY_2x2 As Double = 22#
+Private Const PENALTY_SKIP_BASE As Double = 120#
+Private Const PENALTY_SKIP_PER_CHAR As Double = 0.35
+
+Private Const REPEAT_LINE_MAX_LEN As Long = 70     ' candidates for running headers/footers
+Private Const REPEAT_MIN_COUNT As Long = 3         ' drop if appears >=3 times
+Private SOFT_HYPHEN As String   ' U+00AD
+
+'==================== UTILITIES ====================
+Private Function RxTest(ByVal text As String, ByVal pattern As String) As Boolean
+    Static re As Object: Set re = CreateObject("VBScript.RegExp")
+    With re
+        .Global = False: .Multiline = False: .IgnoreCase = True
+        .pattern = pattern
+    End With
+    On Error Resume Next
+    RxTest = re.Test(text)
+End Function
+
+Private Function CleanText(ByVal s As String) As String
+    SOFT_HYPHEN = ChrW(&HAD)
+    Dim t As String
+    t = s
+    ' Normalize whitespace & control
+    t = Replace(t, ChrW(160), " ")
+    t = Replace(t, SOFT_HYPHEN, "")                ' strip soft hyphen from PDF reflow
+    t = Replace(t, vbTab, " ")
+    t = Replace(t, Chr(11), " ")
+    t = Replace(t, Chr(7), "")
+    ' Common PDF artifacts at line starts
+    t = Trim$(t)
+    If Left$(t, 2) = "/ " Then t = Mid$(t, 3)
+    If Left$(t, 1) = "/" Then t = Mid$(t, 2)
+
+    ' Normalize dashes (en/em) to hyphen for stable counting
+    t = Replace(t, "–", "-")
+    t = Replace(t, "—", "-")
+    ' Hyphenation healing (when Word preserved CR/LF inside paragraph text)
+    t = Replace(t, "- " & vbCr, "")
+    t = Replace(t, "-" & vbCr, "")
+    t = Replace(t, "-" & vbLf, "")
+
+    ' Squash CR/LF to spaces
+    t = Replace(t, vbCr, " ")
+    t = Replace(t, vbLf, " ")
+    Do While InStr(t, "  ") > 0
+        t = Replace(t, "  ", " ")
+    Loop
+    CleanText = Trim$(t)
+End Function
+
+Private Function ParaLen(ByVal s As String) As Long
+    ParaLen = Len(Replace(Replace(s, " ", ""), vbTab, ""))
+End Function
+
+Private Function SumLen(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As Long
+    Dim i As Long, n As Long
+    For i = i1 To i2: n = n + ParaLen(arr(i)): Next
+    SumLen = n
+End Function
+
+Private Function JoinRange(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As String
+    Dim i As Long, t As String
+    For i = i1 To i2
+        If Len(arr(i)) > 0 Then
+            If Len(t) > 0 Then t = t & vbCrLf & arr(i) Else t = arr(i)
+        End If
+    Next
+    JoinRange = t
+End Function
+
+Private Function EndsWithAny(ByVal s As String, ByVal chars As String) As Boolean
+    If Len(s) = 0 Then EndsWithAny = False: Exit Function
+    EndsWithAny = InStr(1, chars, Right$(s, 1), vbBinaryCompare) > 0
+End Function
+
+Private Function LooksLikeTitleCase(ByVal s As String) As Boolean
+    Dim words() As String, i As Long, w As String, titled As Long, total As Long
+    words = Split(s, " ")
+    total = 0: titled = 0
+    For i = LBound(words) To UBound(words)
+        w = Trim$(words(i))
+        If Len(w) > 0 Then
+            total = total + 1
+            If Mid$(w, 1, 1) = UCase$(Mid$(w, 1, 1)) Then titled = titled + 1
+        End If
+    Next
+    LooksLikeTitleCase = (total >= 2 And titled >= total - 1) ' tolerate a stopword
+End Function
+
+Private Sub CountShortLines(ByRef arr() As String, ByRef drop As Object)
+    ' Builds frequency of short lines and flags those appearing >= REPEAT_MIN_COUNT
+    Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
+    Dim i As Long
+    Dim key As String
+    Dim k As Variant
+
+    For i = LBound(arr) To UBound(arr)
+        key = arr(i)
+        If Len(key) > 0 And Len(key) <= REPEAT_LINE_MAX_LEN Then
+            If dict.Exists(key) Then
+                dict(key) = CLng(dict(key)) + 1
+            Else
+                dict.Add key, 1
+            End If
+        End If
+    Next i
+
+    Set drop = CreateObject("Scripting.Dictionary")
+    For Each k In dict.Keys          ' k is Variant
+        If CLng(dict(k)) >= REPEAT_MIN_COUNT Then drop.Add k, True
+    Next k
+End Sub
+
+
+Private Sub CollectParagraphs(doc As Document, ByRef texts() As String)
+    Dim p As Object
+    Dim tmp As New Collection
+    Dim s As String
+    Dim i As Long
+
+    For Each p In doc.Paragraphs
+        s = CleanText(p.Range.text)
+        If Len(s) > 0 Then
+            tmp.Add s
+        End If
+    Next p
+
+    If tmp.Count = 0 Then
+        ReDim texts(1 To 1)
+        texts(1) = ""
+    Else
+        ReDim texts(1 To tmp.Count)
+        For i = 1 To tmp.Count
+            texts(i) = tmp(i)
+        Next i
+    End If
+End Sub
+
+Private Sub DropRepeatingShortLines(ByRef arr() As String)
+    Dim toDrop As Object: Call CountShortLines(arr, toDrop)
+    If toDrop Is Nothing Then Exit Sub
+    Dim outCol As New Collection, i As Long, s As String
+    For i = LBound(arr) To UBound(arr)
+        s = arr(i)
+        If Not (Len(s) <= REPEAT_LINE_MAX_LEN And toDrop.Exists(s)) Then
+            outCol.Add s
+        End If
+    Next
+    If outCol.Count = 0 Then Exit Sub
+    ReDim arr(1 To outCol.Count)
+    For i = 1 To outCol.Count: arr(i) = outCol(i): Next
+End Sub
+
+Private Sub DefragmentParas(ByRef arr() As String)
+    If Not ENABLE_DEFRAG Then Exit Sub
+    If UBound(arr) < 2 Then Exit Sub
+    Dim outCol As New Collection, i As Long, buf As String, enough As Boolean, s As String, isHeading As Boolean
+    For i = LBound(arr) To UBound(arr)
+        s = arr(i)
+        isHeading = (ParaLen(s) < 40) And (s = UCase$(s) Or LooksLikeTitleCase(s))
+        If isHeading Then
+            If Len(buf) > 0 Then outCol.Add Trim$(buf): buf = ""
+            outCol.Add s
+        Else
+            If Len(buf) = 0 Then buf = s Else buf = buf & " " & s
+            enough = (ParaLen(buf) >= DEFRAG_MIN_CHARS) Or EndsWithAny(buf, DEFRAG_SENT_ENDS)
+            If enough Then outCol.Add Trim$(buf): buf = ""
+        End If
+    Next
+    If Len(buf) > 0 Then outCol.Add Trim$(buf)
+    ReDim arr(1 To outCol.Count)
+    For i = 1 To outCol.Count: arr(i) = outCol(i): Next
+End Sub
+
+Private Function AlignCost(EN() As String, DE() As String, ei1 As Long, ei2 As Long, dj1 As Long, dj2 As Long, ratio As Double, penalty As Double) As Double
+    Dim lenEN As Long: lenEN = SumLen(EN, ei1, ei2)
+    Dim lenDE As Long: lenDE = SumLen(DE, dj1, dj2)
+    If lenEN = 0 And lenDE = 0 Then AlignCost = penalty: Exit Function
+    ' Length mismatch cost (use exponent < 1 to soften outliers)
+    Dim dev As Double: dev = Abs(lenDE - lenEN * ratio)
+    AlignCost = dev ^ 0.9 + penalty
+End Function
+
+Private Sub UpdateCell(ByRef cost() As Double, ByRef backA() As Integer, ByRef backI() As Long, ByRef backJ() As Long, _
+                       ni As Long, nj As Long, newCost As Double, action As Integer, pi As Long, pj As Long)
+    If newCost < cost(ni, nj) Then
+        cost(ni, nj) = newCost
+        backA(ni, nj) = action
+        backI(ni, nj) = pi
+        backJ(ni, nj) = pj
+    End If
+End Sub
+
+Private Function BrowseForFile(prompt As String, Optional pattern As String = "*.pdf;*.docx") As String
+    Dim fd As FileDialog
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+    With fd
+        .Title = prompt
+        .Filters.Clear
+        .Filters.Add "Docs (PDF/DOCX)", pattern
+        .AllowMultiSelect = False
+        If .Show <> -1 Then Exit Function
+        BrowseForFile = .SelectedItems(1)
+    End With
+End Function
+
+Private Function OpenAsDocx(path As String) As Document
+    If LCase$(Right$(path, 5)) = ".docx" Then
+        Set OpenAsDocx = Documents.Open(path, ReadOnly:=True)
+    Else
+        Set OpenAsDocx = Documents.Open(FileName:=path, ConfirmConversions:=False, ReadOnly:=True)
+    End If
+End Function
+
+Private Sub ColorRow(ByVal cell As cell, ByVal action As Integer)
+    On Error Resume Next
+    Select Case action
+        Case 1 ' 1x1
+            cell.Range.HighlightColorIndex = wdNoHighlight
+        Case 2, 3 ' 1x2 or 2x1
+            cell.Range.HighlightColorIndex = wdYellow
+        Case 4 ' 2x2
+            cell.Range.HighlightColorIndex = wdTurquoise
+        Case 5, 6 ' skips
+            cell.Range.HighlightColorIndex = wdBrightGreen
+    End Select
+End Sub
+
+'==================== MAIN ====================
+Public Sub Align_EN_DE_ToTable()
+    Dim enPath As String, dePath As String
+    enPath = BrowseForFile("Pick English file (PDF or DOCX):")
+    If enPath = "" Then Exit Sub
+    dePath = BrowseForFile("Pick German file (PDF or DOCX):")
+    If dePath = "" Then Exit Sub
+
+    Application.ScreenUpdating = False
+    On Error GoTo CleanFail
+
+    Dim enDoc As Document, deDoc As Document
+    Set enDoc = OpenAsDocx(enPath)
+    Set deDoc = OpenAsDocx(dePath)
+
+    Dim EN() As String, DE() As String
+    CollectParagraphs enDoc, EN
+    CollectParagraphs deDoc, DE
+
+    ' Drop repeating running headers/footers automatically
+    DropRepeatingShortLines EN
+    DropRepeatingShortLines DE
+
+    ' Defragment into sentence-like blocks
+    DefragmentParas EN
+    DefragmentParas DE
+
+    ' Estimate global length ratio
+    Dim i As Long, sumEN As Long, sumDE As Long
+    For i = LBound(EN) To UBound(EN): sumEN = sumEN + ParaLen(EN(i)): Next
+    For i = LBound(DE) To UBound(DE): sumDE = sumDE + ParaLen(DE(i)): Next
+    Dim r As Double: If sumEN > 0 Then r = sumDE / sumEN Else r = 1#
+
+    ' DP allocate
+    Dim n As Long, M As Long: n = UBound(EN): M = UBound(DE)
+    Dim cost() As Double, backA() As Integer, backI() As Long, backJ() As Long
+    ReDim cost(0 To n, 0 To M)
+    ReDim backA(0 To n, 0 To M)
+    ReDim backI(0 To n, 0 To M)
+    ReDim backJ(0 To n, 0 To M)
+
+    Dim INF As Double: INF = 1E+30
+    Dim j As Long
+    For i = 0 To n
+        For j = 0 To M
+            cost(i, j) = INF
+            backA(i, j) = 0
+            backI(i, j) = 0
+            backJ(i, j) = 0
+        Next j
+    Next i
+    cost(0, 0) = 0
+
+    Dim c As Double
+    For i = 0 To n
+        For j = 0 To M
+            If cost(i, j) < INF Then
+                ' 1x1
+                If i + 1 <= n And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 1, r, 0#)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 1, cost(i, j) + c, 1, i, j
+                End If
+                ' 1x2
+                If i + 1 <= n And j + 2 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 1, j + 1, j + 2, r, PENALTY_1x2)
+                    UpdateCell cost, backA, backI, backJ, i + 1, j + 2, cost(i, j) + c, 2, i, j
+                End If
+                ' 2x1
+                If i + 2 <= n And j + 1 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 1, r, PENALTY_2x1)
+                    UpdateCell cost, backA, backI, backJ, i + 2, j + 1, cost(i, j) + c, 3, i, j
+                End If
+                ' 2x2
+                If i + 2 <= n And j + 2 <= M Then
+                    c = AlignCost(EN, DE, i + 1, i + 2, j + 1, j + 2, r, PENALTY_2x2)
+                    UpdateCell cost, backA, backI, backJ, i + 2, j + 2, cost(i, j) + c, 4, i, j
+                End If
+                ' Skip EN
+                If i + 1 <= n Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(EN(i + 1))
+                    UpdateCell cost, backA, backI, backJ, i + 1, j, cost(i, j) + c, 5, i, j
+                End If
+                ' Skip DE
+                If j + 1 <= M Then
+                    c = PENALTY_SKIP_BASE + PENALTY_SKIP_PER_CHAR * ParaLen(DE(j + 1))
+                    UpdateCell cost, backA, backI, backJ, i, j + 1, cost(i, j) + c, 6, i, j
+                End If
+            End If
+        Next j
+    Next i
+
+    ' Backtrack (with fail-safe)
+    Dim pairs As New Collection, i1 As Long, j1 As Long, rec As Variant, a As Integer, pi As Long, pj As Long
+    i1 = n: j1 = M
+    If cost(i1, j1) >= INF Then
+        ' Fail-safe: stitch trailing tails greedily as 1x1 until one side ends
+        Do While i1 > 0 And j1 > 0
+            rec = Array(1, i1, i1, j1, j1)
+            pairs.Add rec
+            i1 = i1 - 1: j1 = j1 - 1
+        Loop
+        ' Prepend any leftovers as skips
+        Do While i1 > 0
+            rec = Array(5, i1, i1, j1 + 1, j1)
+            pairs.Add rec
+            i1 = i1 - 1
+        Loop
+        Do While j1 > 0
+            rec = Array(6, i1 + 1, i1, j1, j1)
+            pairs.Add rec
+            j1 = j1 - 1
+        Loop
+    Else
+        Do While Not (i1 = 0 And j1 = 0)
+            a = backA(i1, j1): pi = backI(i1, j1): pj = backJ(i1, j1)
+            rec = Array(a, IIf(pi + 1 <= i1, pi + 1, i1), i1, IIf(pj + 1 <= j1, pj + 1, j1), j1)
+            pairs.Add rec
+            i1 = pi: j1 = pj
+        Loop
+    End If
+
+    enDoc.Close False: deDoc.Close False
+
+    ' Output
+    Dim outDoc As Document: Set outDoc = Documents.Add
+    Dim rows As Long: rows = pairs.Count + 1
+    Dim tbl As Table
+    Set tbl = outDoc.Tables.Add(Range:=outDoc.Range(0, 0), NumRows:=rows, NumColumns:=3)
+    tbl.AutoFitBehavior wdAutoFitWindow
+    tbl.cell(1, 1).Range.text = "English"
+    tbl.cell(1, 2).Range.text = "German"
+    tbl.cell(1, 3).Range.text = "Mapping"
+
+    Dim k As Long, enFrom As Long, enTo As Long, deFrom As Long, deTo As Long, rowIx As Long, action As Integer
+    For k = pairs.Count To 1 Step -1
+        rec = pairs(k)
+        action = rec(0): enFrom = rec(1): enTo = rec(2): deFrom = rec(3): deTo = rec(4)
+        rowIx = pairs.Count - k + 2
+        tbl.cell(rowIx, 1).Range.text = JoinRange(EN, enFrom, enTo)
+        tbl.cell(rowIx, 2).Range.text = JoinRange(DE, deFrom, deTo)
+        tbl.cell(rowIx, 3).Range.text = CStr(enFrom) & "-" & enTo & " ? " & deFrom & "-" & deTo & " [a=" & action & "]"
+        Call ColorRow(tbl.cell(rowIx, 3), action)
+    Next
+
+    MsgBox "Alignment complete.", vbInformation
+
+CleanExit:
+    Application.ScreenUpdating = True
+    Exit Sub
+
+CleanFail:
+    Application.ScreenUpdating = True
+    MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical
+    On Error Resume Next
+    If Not enDoc Is Nothing Then enDoc.Close False
+    If Not deDoc Is Nothing Then deDoc.Close False
+End Sub
+
+
