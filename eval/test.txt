@@ -1,9 +1,191 @@
-Private Function JoinRange(arr() As String, ByVal i1 As Long, ByVal i2 As Long) As String
-    Dim i As Long, t As String
-    For i = i1 To i2
-        If Len(arr(i)) > 0 Then
-            If Len(t) > 0 Then t = t & vbCrLf & arr(i) Else t = arr(i)
-        End If
-    Next
-    JoinRange = t
-End Function
+import fitz  # PyMuPDF
+import openai
+import base64
+import os
+import io
+import re
+
+# --- Configuration ---
+os.environ["OPENAI_API_KEY"] = "YOUR_API_KEY_HERE"
+
+PDF_FILE_PATH = "en-allianz-group-annual-report-2024.pdf" # Your sample PDF
+RAW_OUTPUT_FILE = "raw_extracted_text.txt"
+FINAL_OUTPUT_FILE = "final_stitched_text.txt" # Renamed output file
+DPI = 300
+# ---------------------
+
+try:
+    client = openai.OpenAI()
+except openai.OpenAIError:
+    print("OpenAI API key not set or invalid.")
+    print("Please set the OPENAI_API_KEY environment variable.")
+    exit()
+
+def encode_image_to_base64(image_bytes):
+    """Encodes image bytes to a Base64 string."""
+    return base64.b64encode(image_bytes).decode('utf-8')
+
+def convert_pdf_page_to_image(pdf_document, page_num, dpi=300):
+    """Converts a single PDF page to a high-resolution image (as bytes)."""
+    page = pdf_document.load_page(page_num)
+    zoom = dpi / 72
+    mat = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=mat)
+    img_bytes = pix.tobytes("png")
+    return img_bytes
+
+def extract_text_with_gpt4o_vision(base64_image):
+    """
+    Sends the image to GPT-4o with a smart prompt to handle
+    columns, headers, and footers.
+    """
+    print("Sending image to GPT-4o Vision for transcription...")
+    
+    vision_prompt = """
+    You are an expert document transcription service. Your task is to extract all
+    text from the provided image, which is a single page from a complex document.
+    
+    Follow these rules strictly:
+    1.  **Read Order (Columns):** The document likely has multiple columns.
+        You MUST transcribe the text in its logical reading order.
+        Read all of column 1 first, then all of column 2, etc.
+        Do not mix text line-by-line across columns.
+    2.  **Ignore Headers/Footers:** Identify and completely IGNORE any
+        recurring headers (e.g., 'Allianz Group Annual Report 2024') or
+        footers (e.g., page numbers, 'Geschäftsbericht 2024').
+        Do not include them in the output.
+    3.  **Transcribe Everything Else:** Transcribe all body text, headings,
+        subheadings, tables, and footnotes.
+    4.  **Preserve Formatting:** Maintain paragraphs and line breaks as
+        they appear in the original text.
+    
+    Begin the transcription now, following these rules precisely.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": vision_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=4000
+        )
+        return response.choices[0].message.content
+    except openai.OpenAIError as e:
+        print(f"Error calling OpenAI API: {e}")
+        return None
+
+# --- NEW FUNCTION (REPLACES LLM CALL) ---
+def rule_based_stitching(raw_text):
+    """
+    Stitches text split across pages using simple rules.
+    This is free and fast.
+    """
+    print("\nRunning free rule-based stitching...")
+    
+    # Split text by our page markers
+    # We use re.split to keep the delimiters, but we don't need them.
+    pages = re.split(r'\n\n===== PAGE \d+ =====\n\n', raw_text)
+    
+    stitched_text = ""
+    
+    if not pages:
+        return ""
+        
+    # Add the first page (or header) as-is
+    stitched_text = pages[0]
+    
+    # Iterate from the second page onwards
+    for i in range(1, len(pages)):
+        current_page_text = pages[i].lstrip() # Remove leading whitespace
+        previous_page_text = stitched_text.rstrip() # Get previous block
+        
+        if not current_page_text:
+            continue
+            
+        # Get the last few characters of the previous page
+        last_chars_prev = previous_page_text[-50:] # Look at last 50 chars
+        
+        # Get the first few characters of the current page
+        first_chars_current = current_page_text[:50]
+        
+        # --- Stitching Logic ---
+        # 1. Check for hyphenated word breaks (e.g., "contin-\nuation")
+        if previous_page_text.endswith('-'):
+            # Remove the hyphen and the newline, join directly
+            stitched_text = previous_page_text[:-1] + current_page_text
+            
+        # 2. Check for sentence breaks
+        # (previous page doesn't end with punctuation) AND
+        # (current page starts with a lowercase letter)
+        elif (previous_page_text and
+              previous_page_text[-1] not in '.!?"\'»' and
+              current_page_text[0].islower()):
+            
+            # Join with a space (to replace the newline)
+            stitched_text += " " + current_page_text
+            
+        # 3. No stitching needed - just add the new page
+        else:
+            stitched_text += "\n\n" + current_page_text
+            
+    return stitched_text
+
+def main():
+    """Main function to process the PDF."""
+    if not os.path.exists(PDF_FILE_PATH):
+        print(f"Error: PDF file not found at {PDF_FILE_PATH}")
+        return
+
+    try:
+        pdf_document = fitz.open(PDF_FILE_PATH)
+    except Exception as e:
+        print(f"Error opening PDF: {e}")
+        return
+
+    total_pages = len(pdf_document)
+    print(f"Processing '{PDF_FILE_PATH}' with {total_pages} pages...")
+
+    all_raw_text = ""
+
+    # --- Step 1: VLM Extraction (Page-by-Page) ---
+    for page_num in range(total_pages):
+        print(f"--- Processing Page {page_num + 1} of {total_pages} ---")
+        
+        img_bytes = convert_pdf_page_to_image(pdf_document, page_num, dpi=DPI)
+        b64_image = encode_image_to_base64(img_bytes)
+        
+        extracted_text = extract_text_with_gpt4o_vision(b64_image)
+        
+        if extracted_text:
+            # We add our marker for the stitching function
+            all_raw_text += f"\n\n===== PAGE {page_num + 1} =====\n\n"
+            all_raw_text += extracted_text
+    
+    pdf_document.close()
+    
+    with open(RAW_OUTPUT_FILE, "w", encoding="utf-8") as f:
+        f.write(all_raw_text)
+    print(f"\nRaw text saved to '{RAW_OUTPUT_FILE}'.")
+
+    # --- Step 2: Rule-Based Stitching (NO API CALL) ---
+    final_text = rule_based_stitching(all_raw_text)
+    
+    with open(FINAL_OUTPUT_FILE, "w", encoding="utf-8") as f:
+        f.write(final_text)
+
+    print(f"Done! Final stitched text saved to '{FINAL_OUTPUT_FILE}'.")
+
+if __name__ == "__main__":
+    main()
