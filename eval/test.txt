@@ -5,20 +5,30 @@ import os
 import io
 import re
 
-# --- Configuration ---
-os.environ["OPENAI_API_KEY"] = "YOUR_API_KEY_HERE"
+# --- Configuration for Azure OpenAI ---
+# <<< CHANGE HERE: Using Azure-specific environment variables
+os.environ["AZURE_OPENAI_ENDPOINT"] = "https://YOUR_RESOURCE_NAME.openai.azure.com/"
+os.environ["AZURE_OPENAI_KEY"] = "YOUR_AZURE_API_KEY_HERE"
+os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"] = "YOUR_GPT4O_DEPLOYMENT_NAME_HERE"
+# This is a recent API version that supports GPT-4o vision.
+AZURE_OPENAI_API_VERSION = "2024-05-01-preview" 
 
 PDF_FILE_PATH = "en-allianz-group-annual-report-2024.pdf" # Your sample PDF
 RAW_OUTPUT_FILE = "raw_extracted_text.txt"
-FINAL_OUTPUT_FILE = "final_stitched_text.txt" # Renamed output file
+FINAL_OUTPUT_FILE = "final_stitched_text.txt"
 DPI = 300
 # ---------------------
 
 try:
-    client = openai.OpenAI()
+    # <<< CHANGE HERE: Initialize the AzureOpenAI client
+    client = openai.AzureOpenAI(
+        api_key=os.environ.get("AZURE_OPENAI_KEY"),
+        azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+        api_version=AZURE_OPENAI_API_VERSION
+    )
 except openai.OpenAIError:
-    print("OpenAI API key not set or invalid.")
-    print("Please set the OPENAI_API_KEY environment variable.")
+    print("Azure OpenAI environment variables not set or invalid.")
+    print("Please set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_KEY.")
     exit()
 
 def encode_image_to_base64(image_bytes):
@@ -39,7 +49,7 @@ def extract_text_with_gpt4o_vision(base64_image):
     Sends the image to GPT-4o with a smart prompt to handle
     columns, headers, and footers.
     """
-    print("Sending image to GPT-4o Vision for transcription...")
+    print("Sending image to Azure GPT-4o Vision for transcription...")
     
     vision_prompt = """
     You are an expert document transcription service. Your task is to extract all
@@ -64,7 +74,8 @@ def extract_text_with_gpt4o_vision(base64_image):
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            # <<< CHANGE HERE: Use the *deployment name* not the model name
+            model=os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME"),
             messages=[
                 {
                     "role": "user",
@@ -83,7 +94,12 @@ def extract_text_with_gpt4o_vision(base64_image):
         )
         return response.choices[0].message.content
     except openai.OpenAIError as e:
-        print(f"Error calling OpenAI API: {e}")
+        print(f"Error calling Azure OpenAI API: {e}")
+        # <<< CHANGE HERE: Check for common Azure error
+        if "ContentFilter" in str(e):
+            print("\n*** A content filter error was detected. ***")
+            print("This may be due to Azure's Content Safety filters.")
+            print("Check your Azure resource for 'Content Filtering' settings.")
         return None
 
 # --- NEW FUNCTION (REPLACES LLM CALL) ---
@@ -95,7 +111,6 @@ def rule_based_stitching(raw_text):
     print("\nRunning free rule-based stitching...")
     
     # Split text by our page markers
-    # We use re.split to keep the delimiters, but we don't need them.
     pages = re.split(r'\n\n===== PAGE \d+ =====\n\n', raw_text)
     
     stitched_text = ""
@@ -115,7 +130,7 @@ def rule_based_stitching(raw_text):
             continue
             
         # Get the last few characters of the previous page
-        last_chars_prev = previous_page_text[-50:] # Look at last 50 chars
+        last_chars_prev = previous_page_text[-50:] 
         
         # Get the first few characters of the current page
         first_chars_current = current_page_text[:50]
@@ -123,17 +138,14 @@ def rule_based_stitching(raw_text):
         # --- Stitching Logic ---
         # 1. Check for hyphenated word breaks (e.g., "contin-\nuation")
         if previous_page_text.endswith('-'):
-            # Remove the hyphen and the newline, join directly
             stitched_text = previous_page_text[:-1] + current_page_text
             
         # 2. Check for sentence breaks
-        # (previous page doesn't end with punctuation) AND
-        # (current page starts with a lowercase letter)
         elif (previous_page_text and
               previous_page_text[-1] not in '.!?"\'»' and
               current_page_text[0].islower()):
             
-            # Join with a space (to replace the newline)
+            # Join with a space
             stitched_text += " " + current_page_text
             
         # 3. No stitching needed - just add the new page
@@ -169,7 +181,6 @@ def main():
         extracted_text = extract_text_with_gpt4o_vision(b64_image)
         
         if extracted_text:
-            # We add our marker for the stitching function
             all_raw_text += f"\n\n===== PAGE {page_num + 1} =====\n\n"
             all_raw_text += extracted_text
     
