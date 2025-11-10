@@ -1,29 +1,38 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { PacmanLoader } from 'react-spinners';
-import { FaUpload, FaFilePdf, FaTimesCircle, FaDownload, FaCog, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
+import { RingLoader } from 'react-spinners'; // A more 'tech' loader
+import { 
+  FiFile, FiUploadCloud, FiX, FiCheckCircle, FiAlertTriangle, 
+  FiDownload, FiCpu, FiSettings, FiChevronsDown, FiFileText, FiZap 
+} from 'react-icons/fi';
 import './App.css';
 
 const API_URL = 'http://localhost:8000';
 
 function App() {
+  // --- State for the Form ---
   const [englishFile, setEnglishFile] = useState(null);
   const [germanFile, setGermanFile] = useState(null);
   const [alignmentMode, setAlignmentMode] = useState('ToC-Based');
   const [tocPageNum, setTocPageNum] = useState(2);
 
+  // --- State for the App Status ---
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // --- State for the Results ---
   const [findings, setFindings] = useState([]);
   const [reportBase64, setReportBase64] = useState(null);
 
+  /**
+   * Main function to handle the API call
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!englishFile || !germanFile) {
-      setError('Please upload both PDF files to proceed.');
+      setError('Please upload both PDF files.');
       return;
     }
-
     setIsLoading(true);
     setError(null);
     setFindings([]);
@@ -37,241 +46,305 @@ function App() {
 
     try {
       const response = await axios.post(`${API_URL}/analyze`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-
       setFindings(response.data.findings || []);
       setReportBase64(response.data.report_base64);
-
     } catch (err) {
       const errorMsg = err.response?.data?.detail || err.message;
-      setError(`Analysis Failed: ${errorMsg}. Please check your files and configuration.`);
+      setError(`Analysis Failed: ${errorMsg}`);
     } finally {
       setIsLoading(false);
     }
   };
 
+  /**
+   * Triggers a download of the Base64 Excel data
+   */
   const handleDownload = () => {
     if (!reportBase64) return;
     const link = document.createElement('a');
     link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${reportBase64}`;
-    link.download = `Translation_Evaluation_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+    link.download = `Translation_Evaluation_${new Date().toISOString().split('T')[0]}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="app-layout">
-      {/* Sidebar / Configuration Panel */}
-      <aside className="sidebar-panel">
-        <div className="sidebar-header">
-          <FaCog className="icon-cog" />
-          <h1>Evaluation Settings</h1>
-        </div>
-        <form onSubmit={handleSubmit} className="config-form">
-          <FileUploadInput 
-            label="Upload English PDF (Source)" 
-            file={englishFile} 
-            setFile={setEnglishFile} 
-          />
-          <FileUploadInput 
-            label="Upload German PDF (Translation)" 
-            file={germanFile} 
-            setFile={setGermanFile} 
-          />
+    <div className="app-container">
+      <header className="app-header">
+        <h1><FiCpu className="header-icon" /> Translation AI Evaluator</h1>
+      </header>
 
-          <SelectInput
-            label="Alignment Mode"
-            value={alignmentMode}
-            onChange={(e) => setAlignmentMode(e.target.value)}
-            options={[
-              { value: 'ToC-Based', label: 'ToC-Based Alignment' },
-              { value: 'Full Document', label: 'Full Document Alignment' },
-            ]}
-          />
-
-          {alignmentMode === 'ToC-Based' && (
-            <div className="form-group">
-              <label htmlFor="tocPageNum">ToC Page Number</label>
-              <input
-                id="tocPageNum"
-                type="number"
-                value={tocPageNum}
-                onChange={(e) => setTocPageNum(parseInt(e.target.value, 10))}
-                min="1"
-                step="1"
-                className="input-field"
+      <main className="app-main">
+        {/* --- Form and Controls Panel --- */}
+        <form onSubmit={handleSubmit} className="control-panel glass-panel">
+          
+          <div className="panel-section upload-section">
+            <h2 className="panel-header">
+              <FiUploadCloud /> 1. Upload Documents
+            </h2>
+            <div className="upload-zones">
+              <FileUploadZone
+                file={englishFile}
+                setFile={setEnglishFile}
+                title="English (Source) PDF"
               />
-              <p className="help-text">Specify the 1-indexed page number where the Table of Contents starts.</p>
+              <FileUploadZone
+                file={germanFile}
+                setFile={setGermanFile}
+                title="German (Translated) PDF"
+              />
             </div>
-          )}
+          </div>
 
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={isLoading || !englishFile || !germanFile}
-          >
-            {isLoading ? '🚀 Analyzing...' : '🚀 Run Analysis'}
-          </button>
+          <div className="panel-section config-section">
+            <h2 className="panel-header">
+              <FiSettings /> 2. Configure Analysis
+            </h2>
+            <div className="config-grid">
+              <div className="form-group">
+                <label htmlFor="alignmentMode">Alignment Mode</label>
+                <div className="select-wrapper">
+                  <select
+                    id="alignmentMode"
+                    value={alignmentMode}
+                    onChange={(e) => setAlignmentMode(e.target.value)}
+                  >
+                    <option value="ToC-Based">ToC-Based Alignment</option>
+                    <option value="Full Document">Full Document Alignment</option>
+                  </select>
+                  <FiChevronsDown className="select-arrow" />
+                </div>
+              </div>
+              
+              <div className={`form-group toc-group ${alignmentMode !== 'ToC-Based' ? 'disabled' : ''}`}>
+                <label htmlFor="tocPageNum">ToC Page Number</label>
+                <input
+                  id="tocPageNum"
+                  type="number"
+                  value={tocPageNum}
+                  onChange={(e) => setTocPageNum(parseInt(e.target.value, 10))}
+                  min="1"
+                  step="1"
+                  disabled={alignmentMode !== 'ToC-Based'}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="panel-section run-section">
+            <h2 className="panel-header">
+              <FiZap /> 3. Execute
+            </h2>
+            <div className="run-buttons">
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isLoading || !englishFile || !germanFile}
+              >
+                {isLoading ? (
+                  <RingLoader size={20} color={"#fff"} speedMultiplier={1} />
+                ) : (
+                  'Run Analysis'
+                )}
+                {isLoading && <span>Analyzing...</span>}
+              </button>
+              
+              {reportBase64 && !isLoading && (
+                <button type="button" onClick={handleDownload} className="btn btn-secondary">
+                  <FiDownload />
+                  <span>Download Report</span>
+                </button>
+              )}
+            </div>
+          </div>
         </form>
 
-        {reportBase64 && !isLoading && (
-          <div className="download-section">
-            <button onClick={handleDownload} className="btn btn-secondary">
-              <FaDownload /> Download Evaluation Report
-            </button>
+        {/* --- Results Panel --- */}
+        <section className="results-panel">
+          <h2 className="panel-header">Evaluation Results</h2>
+          <div className="results-content glass-panel">
+            <StatusDisplay
+              isLoading={isLoading}
+              error={error}
+              findingsCount={findings.length}
+            />
+            
+            {findings.length > 0 && !isLoading && (
+              <div className="findings-list">
+                {findings.map((finding, index) => (
+                  <FindingCard key={index} finding={finding} />
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="main-content-area">
-        <h2>Evaluation Results</h2>
-
-        {isLoading && (
-          <div className="status-message loading">
-            <PacmanLoader color="#2196F3" size={30} />
-            <p>Analyzing documents, this may take a few moments...</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="status-message error">
-            <FaExclamationCircle className="status-icon" />
-            <h3>Error Occurred</h3>
-            <p>{error}</p>
-            <p>Please review your inputs and try again.</p>
-          </div>
-        )}
-
-        {!isLoading && !error && findings.length === 0 && (
-          <div className="status-message empty-state">
-            <FaFilePdf className="status-icon" />
-            <p>Upload your English and German PDF documents, configure settings, and click 'Run Analysis' to see results here.</p>
-          </div>
-        )}
-
-        {findings.length > 0 && (
-          <div className="results-container">
-            <h3 className="results-summary">
-              <FaCheckCircle className="icon-success" /> Found {findings.length} potential issues or insights.
-            </h3>
-            {findings.map((finding, index) => (
-              <FindingCard key={index} finding={finding} />
-            ))}
-          </div>
-        )}
+        </section>
       </main>
     </div>
   );
 }
 
+// --- Helper Component: FileUploadZone ---
+function FileUploadZone({ file, setFile, title }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const inputId = `file-input-${title.replace(' ', '-')}`;
 
-// --- Reusable File Upload Input Component ---
-function FileUploadInput({ label, file, setFile }) {
-  const id = label.replace(/\s+/g, '-').toLowerCase(); // Unique ID for label connection
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && droppedFile.type === "application/pdf") {
+      setFile(droppedFile);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+    }
+  };
+
+  if (file) {
+    return (
+      <div className="file-drop-zone file-selected">
+        <FiFileText className="file-icon" />
+        <span className="file-name">{file.name}</span>
+        <button
+          type="button"
+          className="remove-file-btn"
+          onClick={() => setFile(null)}
+        >
+          <FiX />
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="form-group file-upload-group">
-      <label htmlFor={id} className="file-upload-label">
-        {label}
-        <span className="file-upload-btn">
-          <FaUpload /> {file ? 'Change File' : 'Browse Files'}
-        </span>
-      </label>
+    <label
+      htmlFor={inputId}
+      className={`file-drop-zone ${isDragging ? 'dragging' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <input
-        id={id}
         type="file"
+        id={inputId}
         accept="application/pdf"
-        onChange={(e) => setFile(e.target.files[0])}
+        onChange={handleFileChange}
         className="hidden-file-input"
       />
-      {file && (
-        <div className="file-info">
-          <FaFilePdf className="file-icon" />
-          <span>{file.name}</span>
-          <FaTimesCircle className="remove-file-icon" onClick={() => setFile(null)} />
-        </div>
-      )}
-    </div>
+      <FiUploadCloud className="upload-icon" />
+      <span className="upload-title">{title}</span>
+      <span className="upload-text">Drag & drop PDF, or click to browse</span>
+    </label>
   );
 }
 
-// --- Reusable Select Input Component ---
-function SelectInput({ label, value, onChange, options }) {
-  const id = label.replace(/\s+/g, '-').toLowerCase();
-  return (
-    <div className="form-group">
-      <label htmlFor={id}>{label}</label>
-      <div className="custom-select-wrapper">
-        <select id={id} value={value} onChange={onChange} className="input-field">
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <span className="custom-select-arrow"></span> {/* Custom arrow */}
+// --- Helper Component: StatusDisplay ---
+function StatusDisplay({ isLoading, error, findingsCount }) {
+  if (isLoading) {
+    return (
+      <div className="status-display loading">
+        <RingLoader color={"#8884d8"} size={60} />
+        <h3>Analyzing Documents...</h3>
+        <p>This may take several minutes. Please wait.</p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="status-display error">
+        <FiAlertTriangle className="status-icon" />
+        <h3>Analysis Failed</h3>
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (findingsCount === 0) {
+    return (
+      <div className="status-display empty">
+        <FiCheckCircle className="status-icon" />
+        <h3>Ready to Analyze</h3>
+        <p>Upload your documents and click "Run Analysis" to see the results.</p>
+      </div>
+    );
+  }
+
+  return null; // Don't show anything if there are findings (they will show instead)
 }
 
-
-// --- FindingCard Component (Reused and slightly styled) ---
+// --- Helper Component: FindingCard ---
 function FindingCard({ finding }) {
-  const { 
-    page, 
-    type, 
-    suggestion, 
-    english_text, 
-    german_text, 
-    original_phrase, 
-    translated_phrase 
+  const {
+    page,
+    type,
+    suggestion,
+    english_text,
+    german_text,
+    original_phrase,
+    translated_phrase,
   } = finding;
 
+  // Determine a color class based on the finding type
+  const typeClass = type.toLowerCase().replace(' ', '-');
+
   return (
-    <div className="finding-card">
+    <div className="finding-card glass-panel">
       <div className="card-header">
-        <span className="card-badge">{type}</span>
+        <span className={`card-badge ${typeClass}`}>{type}</span>
         <span className="card-page">Page: {page || 'N/A'}</span>
       </div>
-      
+
       {(original_phrase || translated_phrase) && (
-        <div className="card-section error-focus">
-          <h4>🔍 Key Discrepancy</h4>
+        <div className="card-section focus-section">
+          <h4>Key Discrepancy</h4>
           <div className="text-pair">
             <div className="text-block">
-              <strong>English Phrase:</strong>
-              <p className="highlight-error">{original_phrase || 'N/A'}</p>
+              <strong>English Phrase</strong>
+              <p className="highlight-en">{original_phrase || 'N/A'}</p>
             </div>
             <div className="text-block">
-              <strong>German Phrase:</strong>
-              <p className="highlight-warning">{translated_phrase || 'N/A'}</p>
+              <strong>German Phrase</strong>
+              <p className="highlight-de">{translated_phrase || 'N/A'}</p>
             </div>
           </div>
         </div>
       )}
 
-      <div className="card-section">
+      <div className="card-section context-section">
         <h4>Full Context</h4>
         <div className="text-pair">
           <div className="text-block">
-            <strong>English Text:</strong>
+            <strong>English Text</strong>
             <blockquote>{english_text}</blockquote>
           </div>
           <div className="text-block">
-            <strong>German Text:</strong>
+            <strong>German Text</strong>
             <blockquote>{german_text}</blockquote>
           </div>
         </div>
       </div>
 
       <div className="card-section suggestion-section">
-        <strong>💡 Suggestion:</strong> {suggestion}
+        <strong><FiZap /> Suggestion:</strong>
+        <p>{suggestion}</p>
       </div>
     </div>
   );
@@ -285,450 +358,422 @@ export default App;
 
 
 
-/* General Styling */
+
+
+
+/* ---
+   Modern Dark/Glassmorphism Theme
+   --- */
+
+/* --- 1. Root Variables & Base Setup --- */
 :root {
-  font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-  --primary-color: #2196F3; /* Blue */
-  --secondary-color: #4CAF50; /* Green */
-  --accent-color: #FFC107; /* Amber */
-  --error-color: #f44336; /* Red */
-  --text-color: #333;
-  --light-gray: #f8f9fa;
-  --medium-gray: #e9ecef;
-  --dark-gray: #6c757d;
-  --border-color: #dee2e6;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
-  --border-radius-sm: 4px;
-  --border-radius-md: 8px;
+  /* Colors */
+  --bg-color: #0d1117; /* Dark background (GitHub Dark) */
+  --panel-bg: rgba(22, 27, 34, 0.6); /* Glassmorphic panel bg */
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --text-color: #c9d1d9; /* Light text */
+  --text-dim: #8b949e; /* Dimmer text */
+  --primary-color: #8884d8; /* Vibrant purple */
+  --primary-hover: #9e9bdc;
+  --secondary-color: #30d5c8; /* Turquoise */
+  --secondary-hover: #48e0d4;
+  --error-color: #f85149;
+  --warning-color: #f0ad4e;
+  --success-color: #30d5c8;
+  
+  /* Sizing & Effects */
+  --border-radius: 12px;
+  --panel-padding: 24px;
+  --backdrop-blur: 10px; /* The glass effect */
+  --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  
+  /* Font */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
-  background-color: var(--light-gray);
+  background-color: var(--bg-color);
+  background-image: linear-gradient(180deg, rgba(22, 27, 34, 0.1) 0%, var(--bg-color) 100%);
   color: var(--text-color);
-  line-height: 1.6;
-}
-
-h1, h2, h3, h4 {
-  color: #1a202c;
-  margin-top: 0;
-}
-
-/* Layout */
-.app-layout {
-  display: flex;
   min-height: 100vh;
-  flex-direction: column; /* Default for mobile */
 }
 
-.sidebar-panel {
-  width: 100%; /* Full width on mobile */
-  background-color: #ffffff;
+/* --- 2. Main Layout & Header --- */
+.app-container {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 1.5rem 2rem;
+  box-sizing: border-box;
+}
+
+.app-header {
+  padding: 1.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--panel-border);
+  margin-bottom: 2rem;
+}
+
+.app-header h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.header-icon {
+  font-size: 2rem;
+  color: var(--primary-color);
+}
+
+.app-main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+/* --- 3. Glass Panel Base Style --- */
+.glass-panel {
+  background: var(--panel-bg);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(var(--backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur));
+  box-shadow: var(--shadow);
+  padding: var(--panel-padding);
+}
+
+/* --- 4. Control Panel --- */
+.control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  height: min-content; /* Panel only as tall as its content */
+}
+
+.panel-header {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.upload-zones, .config-grid, .run-buttons {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+/* --- 5. File Upload Zone --- */
+.file-drop-zone {
+  border-radius: var(--border-radius);
+  border: 2px dashed var(--panel-border);
   padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-height: 120px;
+}
+
+.file-drop-zone.dragging,
+.file-drop-zone:hover {
+  border-color: var(--primary-color);
+  background-color: rgba(136, 132, 216, 0.1);
+}
+
+.hidden-file-input { display: none; }
+.upload-icon { font-size: 2rem; color: var(--primary-color); }
+.upload-title { font-weight: 600; color: #fff; margin-top: 0.5rem; }
+.upload-text { font-size: 0.9rem; color: var(--text-dim); }
+
+.file-selected {
+  flex-direction: row;
+  justify-content: space-between;
+  border-style: solid;
+  border-color: var(--success-color);
+  background-color: rgba(48, 213, 200, 0.05);
+  padding: 1rem 1.5rem;
+  min-height: auto;
+}
+.file-icon { font-size: 1.5rem; color: var(--success-color); }
+.file-name {
+  font-weight: 500;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.remove-file-btn {
+  background: transparent;
+  border: none;
+  color: var(--error-color);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+}
+
+/* --- 6. Config Section --- */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.form-group label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.form-group input, .form-group select {
+  background: var(--bg-color);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text-color);
+  font-size: 1rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(136, 132, 216, 0.3);
+}
+.form-group.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.select-wrapper { position: relative; }
+.select-wrapper .select-arrow {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.form-group select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+
+/* --- 7. Run Section & Buttons --- */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-primary {
+  background-color: var(--primary-color);
+  color: #fff;
+  border: 1px solid var(--primary-color);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+  box-shadow: 0 0 15px rgba(136, 132, 216, 0.5);
+}
+.btn-secondary {
+  background-color: transparent;
+  color: var(--secondary-color);
+  border: 1px solid var(--secondary-color);
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: rgba(48, 213, 200, 0.1);
+  box-shadow: 0 0 15px rgba(48, 213, 200, 0.5);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- 8. Results Panel --- */
+.results-panel .panel-header {
+  margin: 0 0 1.5rem 0;
+  padding-bottom: 0;
+  border: none;
+}
+.results-content {
+  min-height: 300px;
+}
+
+/* --- 9. Status Display --- */
+.status-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem 1rem;
+  min-height: 250px;
+  color: var(--text-dim);
+}
+.status-display .status-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.status-display h3 {
+  font-size: 1.25rem;
+  color: #fff;
+  margin: 0.5rem 0;
+}
+.status-display.loading { color: var(--primary-color); }
+.status-display.error { color: var(--error-color); }
+.status-display.error h3 { color: var(--error-color); }
+.status-display.empty { color: var(--success-color); }
+.status-display.empty h3 { color: var(--success-color); }
+
+/* --- 10. Findings List & Card --- */
+.findings-list {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
 
-.main-content-area {
-  flex-grow: 1;
-  padding: 1.5rem;
-  background-color: var(--light-gray);
-}
-
-@media (min-width: 768px) { /* Tablet and Desktop */
-  .app-layout {
-    flex-direction: row;
-  }
-  .sidebar-panel {
-    width: 380px; /* Fixed width sidebar */
-    min-height: 100vh;
-    border-right: 1px solid var(--border-color);
-    border-bottom: none;
-    box-shadow: none;
-  }
-  .main-content-area {
-    padding: 2rem;
-  }
-}
-
-/* Sidebar Header */
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.sidebar-header h1 {
-  font-size: 1.6rem;
-  margin: 0;
-  font-weight: 600;
-}
-
-.icon-cog {
-  font-size: 1.8rem;
-  color: var(--primary-color);
-}
-
-/* Form Styling */
-.config-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  position: relative; /* For custom select arrow */
-}
-
-.form-group label {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--dark-gray);
-}
-
-.input-field {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md);
-  box-sizing: border-box;
-  font-size: 1rem;
-  background-color: #fff;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.input-field:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 33, 150, 243), 0.2);
-  outline: none;
-}
-
-.help-text {
-  font-size: 0.85rem;
-  color: var(--dark-gray);
-  margin-top: 0.25rem;
-}
-
-/* Custom Select Dropdown */
-.custom-select-wrapper {
-  position: relative;
-}
-
-.custom-select-wrapper select {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  padding-right: 2.5rem; /* Make space for custom arrow */
-}
-
-.custom-select-arrow {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%) rotate(45deg);
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--dark-gray);
-  border-bottom: 2px solid var(--dark-gray);
-  pointer-events: none;
-}
-
-/* File Upload Component */
-.file-upload-group {
-  margin-bottom: 1rem;
-}
-
-.file-upload-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  padding: 12px 16px;
-  border: 2px dashed var(--border-color);
-  border-radius: var(--border-radius-md);
-  background-color: var(--light-gray);
-  transition: border-color 0.2s, background-color 0.2s;
-}
-.file-upload-label:hover {
-  border-color: var(--primary-color);
-  background-color: #e3f2fd;
-}
-
-.file-upload-label strong {
-  color: var(--dark-gray);
-  font-weight: normal;
-}
-
-.file-upload-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background-color: var(--primary-color);
-  color: white;
-  padding: 8px 12px;
-  border-radius: var(--border-radius-sm);
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-.file-upload-btn:hover {
-  background-color: #1976D2;
-}
-
-.hidden-file-input {
-  display: none;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background-color: #e0f2f1; /* Light green */
-  border: 1px solid #c8e6c9;
-  padding: 8px 12px;
-  border-radius: var(--border-radius-md);
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
-}
-.file-icon {
-  color: var(--secondary-color);
-  font-size: 1.2rem;
-}
-.remove-file-icon {
-  color: var(--error-color);
-  cursor: pointer;
-  margin-left: auto;
-  font-size: 1rem;
-  transition: opacity 0.2s;
-}
-.remove-file-icon:hover {
-  opacity: 0.7;
-}
-
-/* Buttons */
-.btn {
-  padding: 12px 18px;
-  border: none;
-  border-radius: var(--border-radius-md);
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s, box-shadow 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-}
-
-.btn-primary {
-  background-color: var(--primary-color);
-  color: white;
-}
-.btn-primary:hover:not(:disabled) {
-  background-color: #1976D2;
-  box-shadow: var(--shadow-sm);
-}
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-.btn-secondary:hover:not(:disabled) {
-  background-color: #5a6268;
-  box-shadow: var(--shadow-sm);
-}
-.btn:disabled {
-  background-color: var(--medium-gray);
-  color: var(--dark-gray);
-  cursor: not-allowed;
-}
-
-.download-section {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border-color);
-  text-align: center;
-}
-
-/* Status Messages */
-.status-message {
-  padding: 2rem;
-  border-radius: var(--border-radius-md);
-  text-align: center;
-  margin-top: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.status-message.loading {
-  background-color: #e3f2fd; /* Light blue */
-  border: 1px solid #bbdefb;
-  color: #1976D2;
-}
-
-.status-message.error {
-  background-color: #ffebee; /* Light red */
-  border: 1px solid #ef9a9a;
-  color: var(--error-color);
-}
-.status-message.error h3 {
-  color: var(--error-color);
-}
-
-.status-message.empty-state {
-  background-color: #ffffff;
-  border: 1px dashed var(--border-color);
-  color: var(--dark-gray);
-}
-
-.status-icon {
-  font-size: 3rem;
-  margin-bottom: 0.5rem;
-}
-.status-message.error .status-icon {
-  color: var(--error-color);
-}
-.status-message.empty-state .status-icon {
-  color: var(--medium-gray);
-}
-
-
-/* Results Container */
-.results-container {
-  margin-top: 1.5rem;
-}
-
-.results-summary {
-  font-size: 1.2rem;
-  margin-bottom: 1.5rem;
-  color: #1a202c;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.icon-success {
-  color: var(--secondary-color);
-}
-
-
-/* Finding Card Styles */
 .finding-card {
-  background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md);
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 1.5rem;
-  overflow: hidden;
-  transition: transform 0.2s;
-}
-
-.finding-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  padding: 0; /* Let sections handle padding */
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .card-header {
-  padding: 0.75rem 1.25rem;
-  background-color: var(--light-gray);
-  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.9rem;
+  padding: 1rem var(--panel-padding);
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .card-badge {
-  background-color: var(--accent-color);
-  color: #333;
-  padding: 4px 8px;
-  border-radius: var(--border-radius-sm);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
   font-weight: 600;
+  background-color: var(--primary-color);
+  color: #fff;
 }
+/* Badge color overrides */
+.card-badge.mistranslation { background-color: var(--error-color); }
+.card-badge.omission { background-color: var(--warning-color); color: #000; }
+.card-badge.addition { background-color: var(--warning-color); color: #000; }
+.card-badge.context-mismatch { background-color: #ff8c00; } /* Dark Orange */
 
 .card-page {
+  font-size: 0.9rem;
   font-weight: 500;
-  color: var(--dark-gray);
+  color: var(--text-dim);
 }
 
 .card-section {
-  padding: 1.25rem;
-  border-bottom: 1px solid var(--medium-gray);
+  padding: 1.5rem var(--panel-padding);
 }
-
-.finding-card:last-child .card-section {
-  border-bottom: none;
-}
-
 .card-section h4 {
-  font-size: 1.05rem;
-  margin-bottom: 0.75rem;
-  color: #1a202c;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: 0 0 1rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .text-pair {
   display: grid;
-  grid-template-columns: 1fr; /* Stack on mobile */
+  grid-template-columns: 1fr;
   gap: 1rem;
 }
-
-@media (min-width: 600px) { /* Two columns on larger screens */
-  .text-pair {
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-  }
-}
-
 .text-block {
-  background-color: var(--light-gray);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--border-radius);
   padding: 1rem;
 }
-
 .text-block strong {
   display: block;
   margin-bottom: 0.5rem;
-  color: var(--dark-gray);
+  color: #fff;
+  font-weight: 500;
 }
-
-blockquote {
+.text-block blockquote, .text-block p {
   margin: 0;
-  padding: 0;
-  color: #555;
+  color: var(--text-color);
   font-style: italic;
   font-size: 0.95rem;
 }
 
+.highlight-en {
+  color: #ffb8b8; /* Light red */
+  background: rgba(248, 81, 73, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-style: normal !important;
+}
+.highlight-de {
+  color: #fffb8b; /* Light yellow */
+  background: rgba(240, 173, 78, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-style: normal !important;
+}
+
 .suggestion-section {
-  background-color: #e8f5e9; /* Light green for suggestions */
-  border-top: 1px solid #d0e9d1;
+  background: rgba(48, 213, 200, 0.05);
+  border-top: 1px solid var(--panel-border);
 }
 .suggestion-section strong {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   color: var(--secondary-color);
+  font-size: 1rem;
   font-weight: 600;
 }
-
-
-/* Highlighted Text */
-.highlight-error {
-  background-color: #ffebee; /* Light red */
-  color: var(--error-color);
-  padding: 2px 5px;
-  border-radius: var(--border-radius-sm);
-  display: inline; /* To not break text flow */
+.suggestion-section p {
+  margin: 0.5rem 0 0 0;
+  color: var(--text-color);
+  font-size: 1rem;
 }
-.highlight-warning {
-  background-color: #fffde7; /* Light yellow */
-  color: #f57f17; /* Darker yellow */
-  padding: 2px 5px;
-  border-radius: var(--border-radius-sm);
-  display: inline;
+
+/* --- 11. Responsive Design --- */
+@media (min-width: 768px) {
+  .upload-zones, .config-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .run-buttons {
+    grid-template-columns: auto auto 1fr;
+    justify-content: flex-start;
+  }
 }
+
+@media (min-width: 1200px) {
+  .app-main {
+    grid-template-columns: 550px 1fr; /* Fixed sidebar, flexible content */
+    align-items: flex-start; /* Align tops */
+  }
+  .text-pair {
+    grid-template-columns: 1fr 1fr;
+  }
+  .file-name {
+    max-width: 300px; /* More space for file names */
+  }
+}
+
