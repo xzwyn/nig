@@ -1,13 +1,11 @@
-INFO:     127.0.0.1:64496 - "POST /analyze HTTP/1.1" 200 OK
-WARNING:  WatchFiles detected changes in 'main.py'. Reloading...
- INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [17604]
-INFO:     Started server process [20776]
+uvicorn main:app --reload
+INFO:     Will watch for changes in these directories: ['C:\\Users\\M3ZEDTZ\\Downloads\\full\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [17952] using WatchFiles
+INFO:     Started server process [13012]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     127.0.0.1:57808 - "POST /analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53176 - "POST /analyze HTTP/1.1" 200 OK
 Connecting to Document Intelligence service for '67.pdf'...
 Connecting to Document Intelligence service for '67g.pdf'...
 FATAL: An error occurred during analysis: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1016)
@@ -42,7 +40,7 @@ Traceback (most recent call last):
   File "C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\azure\core\pipeline\_base.py", line 98, in send  
     response = self.next.send(request)
                ^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\azure\core\pipeline\_base.py", line 98, in send
+  File "C:\Users\M3ZEDTZ\.conda\envs\test\Lib\site-packages\azure\core\pipeline\_base.py", line 98, in send  
     response = self.next.send(request)
                ^^^^^^^^^^^^^^^^^^^^^^^
   [Previous line repeated 2 more times]
@@ -71,4 +69,3 @@ Traceback (most recent call last):
     raise error
 azure.core.exceptions.ServiceRequestError: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1016)
 -> Analysis complete.
--> Saved Document Intelligence JSON to 'output\doc_intelligence_67_20251110_125502.json'
