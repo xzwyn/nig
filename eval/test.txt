@@ -1,405 +1,34 @@
-// frontend/src/App.css
-/* frontend/src/App.css */
-
-/* Basic Resets */
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f0f2f6;
-}
-
-body {
-  margin: 0;
-}
-
-/* Main Layout */
-.app-container {
-  display: flex;
-  min-height: 100vh;
-}
-
-.sidebar {
-  width: 350px;
-  background-color: #ffffff;
-  border-right: 1px solid #dcdcdc;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.main-content {
-  flex-grow: 1;
-  padding: 2rem;
-  overflow-y: auto;
-}
-
-h1 {
-  font-size: 1.5rem;
-  color: #111;
-  margin: 0;
-}
-
-h2 {
-  font-size: 1.25rem;
-  border-bottom: 1px solid #ddd;
-  padding-bottom: 0.5rem;
-}
-
-/* Form Styles */
-form, .download-area {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.form-group label {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-.form-group input[type="file"],
-.form-group select,
-.form-group input[type="number"] {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  box-sizing: border-box; /* Important for padding to work nicely */
-}
-.run-button, .download-button {
-  padding: 12px;
-  font-size: 1rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-.run-button {
-  background-color: #007aff;
-  color: white;
-}
-.run-button:hover:not(:disabled) {
-  background-color: #0056b3;
-}
-.run-button:disabled {
-  background-color: #dcdcdc;
-  cursor: not-allowed;
-}
-.download-button {
-  background-color: #34c759;
-  color: white;
-}
-
-/* Status & Results */
-.status-container {
-  padding: 2rem;
-  border: 1px dashed #ccc;
-  border-radius: 8px;
-  text-align: center;
-  color: #555;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-.status-container.error {
-  border-color: #ff3b30;
-  background-color: #fff5f5;
-  color: #c50000;
-}
-
-/* Finding Card Styles */
-.results-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-.finding-card {
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-}
-.card-header {
-  padding: 0.75rem 1.25rem;
-  background-color: #f7f7f7;
-  border-bottom: 1px solid #e0e0e0;
-  font-weight: 600;
-}
-.card-section {
-  padding: 1.25rem;
-  border-bottom: 1px solid #f0f0f0;
-}
-.finding-card:last-child .card-section {
-  border-bottom: none;
-}
-.grid-2-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-blockquote {
-  margin: 0;
-  padding: 0.75rem;
-  background-color: #f9f9f9;
-  border-left: 4px solid #e0e0e0;
-  color: #333;
-  font-style: italic;
-  font-size: 0.95rem;
-}
-.suggestion {
-  background-color: #f0f8ff;
-}
-.highlight-error {
-  background-color: #ffebeB;
-  color: #c50000;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-.highlight-warning {
-  background-color: #fffbeb;
-  color: #7d4a00;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-
-// frontend/vite.config.js
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-})
-
-// frontend/README.md
-# React + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-
-// frontend/package.json
-{
-  "name": "frontend",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "axios": "^1.13.2",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-icons": "^5.5.0",
-    "spinners": "^1.2.2"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2",
-    "@vitejs/plugin-react": "^5.1.0",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "globals": "^16.5.0",
-    "vite": "^7.2.2"
-  }
-}
-
-// frontend/index.html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-
-// frontend/eslint.config.js
-import js from '@eslint/js'
-import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
-import { defineConfig, globalIgnores } from 'eslint/config'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{js,jsx}'],
-    extends: [
-      js.configs.recommended,
-      reactHooks.configs['recommended-latest'],
-      reactRefresh.configs.vite,
-    ],
-    languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
-      parserOptions: {
-        ecmaVersion: 'latest',
-        ecmaFeatures: { jsx: true },
-        sourceType: 'module',
-      },
-    },
-    rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
-    },
-  },
-])
-
-// frontend/src/main.jsx
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
-
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
-
-// frontend/src/index.css
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
-
-// frontend/src/App.jsx
-// frontend/src/App.jsx
-
 import { useState } from 'react';
 import axios from 'axios';
-import { PacmanLoader } from 'react-spinners'; // A fun loader
-import './App.css'; // We will create this next
+import { PacmanLoader } from 'react-spinners';
+import { FaUpload, FaFilePdf, FaTimesCircle, FaDownload, FaCog, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
+import './App.css';
 
-// Your FastAPI backend URL
 const API_URL = 'http://localhost:8000';
 
 function App() {
-  // --- State for the Form ---
   const [englishFile, setEnglishFile] = useState(null);
   const [germanFile, setGermanFile] = useState(null);
   const [alignmentMode, setAlignmentMode] = useState('ToC-Based');
-  const [tocPageNum, setTocPageNum] = useState(2); // Default to page 2 (1-indexed)
+  const [tocPageNum, setTocPageNum] = useState(2);
 
-  // --- State for the App Status ---
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // --- State for the Results ---
   const [findings, setFindings] = useState([]);
   const [reportBase64, setReportBase64] = useState(null);
 
-  /**
-   * Main function to handle the API call
-   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!englishFile || !germanFile) {
-      setError('Please upload both PDF files.');
+      setError('Please upload both PDF files to proceed.');
       return;
     }
 
-    // 1. Reset state and start loading
     setIsLoading(true);
     setError(null);
     setFindings([]);
     setReportBase64(null);
 
-    // 2. We MUST use FormData to send files
     const formData = new FormData();
     formData.append('english_pdf', englishFile);
     formData.append('german_pdf', germanFile);
@@ -407,142 +36,129 @@ function App() {
     formData.append('toc_page_num', tocPageNum);
 
     try {
-      // 3. Call the API
       const response = await axios.post(`${API_URL}/analyze`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
-      // 4. Set results on success
       setFindings(response.data.findings || []);
       setReportBase64(response.data.report_base64);
 
     } catch (err) {
-      // 5. Set error on failure
       const errorMsg = err.response?.data?.detail || err.message;
-      setError(`Analysis Failed: ${errorMsg}`);
+      setError(`Analysis Failed: ${errorMsg}. Please check your files and configuration.`);
     } finally {
-      // 6. Stop loading
       setIsLoading(false);
     }
   };
 
-  /**
-   * Triggers a download of the Base64 Excel data
-   */
   const handleDownload = () => {
     if (!reportBase64) return;
-    
-    // Create a link element
     const link = document.createElement('a');
-    // The 'data:' URL scheme is used to embed data in a URL
     link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${reportBase64}`;
-    link.download = `Translation_Evaluation_${new Date().toISOString().split('T')[0]}.xlsx`;
-    
-    // Programmatically click the link to trigger the download
+    link.download = `Translation_Evaluation_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="app-container">
-      {/* --- 1. The Sidebar (Configuration) --- */}
-      <aside className="sidebar">
-        <h1>📚 Translation Evaluator</h1>
-        <form onSubmit={handleSubmit}>
-          
-          <div className="form-group">
-            <label>English PDF (Source)</label>
-            <input 
-              type="file" 
-              accept="application/pdf"
-              onChange={(e) => setEnglishFile(e.target.files[0])} 
-            />
-          </div>
+    <div className="app-layout">
+      {/* Sidebar / Configuration Panel */}
+      <aside className="sidebar-panel">
+        <div className="sidebar-header">
+          <FaCog className="icon-cog" />
+          <h1>Evaluation Settings</h1>
+        </div>
+        <form onSubmit={handleSubmit} className="config-form">
+          <FileUploadInput 
+            label="Upload English PDF (Source)" 
+            file={englishFile} 
+            setFile={setEnglishFile} 
+          />
+          <FileUploadInput 
+            label="Upload German PDF (Translation)" 
+            file={germanFile} 
+            setFile={setGermanFile} 
+          />
 
-          <div className="form-group">
-            <label>German PDF (Translation)</label>
-            <input 
-              type="file" 
-              accept="application/pdf"
-              onChange={(e) => setGermanFile(e.target.files[0])} 
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Alignment Mode</label>
-            <select 
-              value={alignmentMode} 
-              onChange={(e) => setAlignmentMode(e.target.value)}
-            >
-              <option value="ToC-Based">ToC-Based</option>
-              <option value="Full Document">Full Document</option>
-            </select>
-          </div>
+          <SelectInput
+            label="Alignment Mode"
+            value={alignmentMode}
+            onChange={(e) => setAlignmentMode(e.target.value)}
+            options={[
+              { value: 'ToC-Based', label: 'ToC-Based Alignment' },
+              { value: 'Full Document', label: 'Full Document Alignment' },
+            ]}
+          />
 
           {alignmentMode === 'ToC-Based' && (
             <div className="form-group">
-              <label>ToC Page Number</label>
-              <input 
-                type="number" 
+              <label htmlFor="tocPageNum">ToC Page Number</label>
+              <input
+                id="tocPageNum"
+                type="number"
                 value={tocPageNum}
                 onChange={(e) => setTocPageNum(parseInt(e.target.value, 10))}
                 min="1"
                 step="1"
+                className="input-field"
               />
+              <p className="help-text">Specify the 1-indexed page number where the Table of Contents starts.</p>
             </div>
           )}
 
-          <button 
-            type="submit" 
-            className="run-button" 
+          <button
+            type="submit"
+            className="btn btn-primary"
             disabled={isLoading || !englishFile || !germanFile}
           >
             {isLoading ? '🚀 Analyzing...' : '🚀 Run Analysis'}
           </button>
-
         </form>
-        
-        {/* --- Download Button --- */}
+
         {reportBase64 && !isLoading && (
-          <div className="download-area">
-            <h3>Export Results</h3>
-            <button onClick={handleDownload} className="download-button">
-              📥 Download Evaluation Report
+          <div className="download-section">
+            <button onClick={handleDownload} className="btn btn-secondary">
+              <FaDownload /> Download Evaluation Report
             </button>
           </div>
         )}
       </aside>
 
-      {/* --- 2. The Main Content (Results) --- */}
-      <main className="main-content">
+      {/* Main Content Area */}
+      <main className="main-content-area">
         <h2>Evaluation Results</h2>
 
         {isLoading && (
-          <div className="status-container">
-            <PacmanLoader color="#36d7b7" />
-            <p>Analyzing... This may take several minutes...</p>
+          <div className="status-message loading">
+            <PacmanLoader color="#2196F3" size={30} />
+            <p>Analyzing documents, this may take a few moments...</p>
           </div>
         )}
 
         {error && (
-          <div className="status-container error">
-            <h3>🚨 Error</h3>
+          <div className="status-message error">
+            <FaExclamationCircle className="status-icon" />
+            <h3>Error Occurred</h3>
             <p>{error}</p>
+            <p>Please review your inputs and try again.</p>
           </div>
         )}
 
         {!isLoading && !error && findings.length === 0 && (
-          <div className="status-container">
-            <p>Upload your PDFs, select an alignment mode, and click 'Run Analysis' to begin.</p>
+          <div className="status-message empty-state">
+            <FaFilePdf className="status-icon" />
+            <p>Upload your English and German PDF documents, configure settings, and click 'Run Analysis' to see results here.</p>
           </div>
         )}
-        
+
         {findings.length > 0 && (
-          <div className="results-list">
-            <h3>Found {findings.length} noteworthy items</h3>
+          <div className="results-container">
+            <h3 className="results-summary">
+              <FaCheckCircle className="icon-success" /> Found {findings.length} potential issues or insights.
+            </h3>
             {findings.map((finding, index) => (
               <FindingCard key={index} finding={finding} />
             ))}
@@ -553,9 +169,59 @@ function App() {
   );
 }
 
-/**
- * A self-contained component to render a single finding
- */
+
+// --- Reusable File Upload Input Component ---
+function FileUploadInput({ label, file, setFile }) {
+  const id = label.replace(/\s+/g, '-').toLowerCase(); // Unique ID for label connection
+
+  return (
+    <div className="form-group file-upload-group">
+      <label htmlFor={id} className="file-upload-label">
+        {label}
+        <span className="file-upload-btn">
+          <FaUpload /> {file ? 'Change File' : 'Browse Files'}
+        </span>
+      </label>
+      <input
+        id={id}
+        type="file"
+        accept="application/pdf"
+        onChange={(e) => setFile(e.target.files[0])}
+        className="hidden-file-input"
+      />
+      {file && (
+        <div className="file-info">
+          <FaFilePdf className="file-icon" />
+          <span>{file.name}</span>
+          <FaTimesCircle className="remove-file-icon" onClick={() => setFile(null)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Reusable Select Input Component ---
+function SelectInput({ label, value, onChange, options }) {
+  const id = label.replace(/\s+/g, '-').toLowerCase();
+  return (
+    <div className="form-group">
+      <label htmlFor={id}>{label}</label>
+      <div className="custom-select-wrapper">
+        <select id={id} value={value} onChange={onChange} className="input-field">
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span className="custom-select-arrow"></span> {/* Custom arrow */}
+      </div>
+    </div>
+  );
+}
+
+
+// --- FindingCard Component (Reused and slightly styled) ---
 function FindingCard({ finding }) {
   const { 
     page, 
@@ -570,19 +236,20 @@ function FindingCard({ finding }) {
   return (
     <div className="finding-card">
       <div className="card-header">
-        <strong>Page:</strong> {page || 'N/A'} | <strong>Type:</strong> {type}
+        <span className="card-badge">{type}</span>
+        <span className="card-page">Page: {page || 'N/A'}</span>
       </div>
       
       {(original_phrase || translated_phrase) && (
         <div className="card-section error-focus">
-          <h4>🔍 Error Focus</h4>
-          <div className="grid-2-col">
-            <div>
-              <strong>Original English Phrase:</strong>
+          <h4>🔍 Key Discrepancy</h4>
+          <div className="text-pair">
+            <div className="text-block">
+              <strong>English Phrase:</strong>
               <p className="highlight-error">{original_phrase || 'N/A'}</p>
             </div>
-            <div>
-              <strong>Translated German Phrase:</strong>
+            <div className="text-block">
+              <strong>German Phrase:</strong>
               <p className="highlight-warning">{translated_phrase || 'N/A'}</p>
             </div>
           </div>
@@ -590,20 +257,20 @@ function FindingCard({ finding }) {
       )}
 
       <div className="card-section">
-        <h4>Full Text Context</h4>
-        <div className="grid-2-col">
-          <div>
+        <h4>Full Context</h4>
+        <div className="text-pair">
+          <div className="text-block">
             <strong>English Text:</strong>
             <blockquote>{english_text}</blockquote>
           </div>
-          <div>
+          <div className="text-block">
             <strong>German Text:</strong>
             <blockquote>{german_text}</blockquote>
           </div>
         </div>
       </div>
 
-      <div className="card-section suggestion">
+      <div className="card-section suggestion-section">
         <strong>💡 Suggestion:</strong> {suggestion}
       </div>
     </div>
@@ -612,3 +279,456 @@ function FindingCard({ finding }) {
 
 export default App;
 
+
+
+
+
+
+
+/* General Styling */
+:root {
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --primary-color: #2196F3; /* Blue */
+  --secondary-color: #4CAF50; /* Green */
+  --accent-color: #FFC107; /* Amber */
+  --error-color: #f44336; /* Red */
+  --text-color: #333;
+  --light-gray: #f8f9fa;
+  --medium-gray: #e9ecef;
+  --dark-gray: #6c757d;
+  --border-color: #dee2e6;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+}
+
+body {
+  margin: 0;
+  background-color: var(--light-gray);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4 {
+  color: #1a202c;
+  margin-top: 0;
+}
+
+/* Layout */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column; /* Default for mobile */
+}
+
+.sidebar-panel {
+  width: 100%; /* Full width on mobile */
+  background-color: #ffffff;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.main-content-area {
+  flex-grow: 1;
+  padding: 1.5rem;
+  background-color: var(--light-gray);
+}
+
+@media (min-width: 768px) { /* Tablet and Desktop */
+  .app-layout {
+    flex-direction: row;
+  }
+  .sidebar-panel {
+    width: 380px; /* Fixed width sidebar */
+    min-height: 100vh;
+    border-right: 1px solid var(--border-color);
+    border-bottom: none;
+    box-shadow: none;
+  }
+  .main-content-area {
+    padding: 2rem;
+  }
+}
+
+/* Sidebar Header */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.sidebar-header h1 {
+  font-size: 1.6rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.icon-cog {
+  font-size: 1.8rem;
+  color: var(--primary-color);
+}
+
+/* Form Styling */
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  position: relative; /* For custom select arrow */
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--dark-gray);
+}
+
+.input-field {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-sizing: border-box;
+  font-size: 1rem;
+  background-color: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-field:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 33, 150, 243), 0.2);
+  outline: none;
+}
+
+.help-text {
+  font-size: 0.85rem;
+  color: var(--dark-gray);
+  margin-top: 0.25rem;
+}
+
+/* Custom Select Dropdown */
+.custom-select-wrapper {
+  position: relative;
+}
+
+.custom-select-wrapper select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 2.5rem; /* Make space for custom arrow */
+}
+
+.custom-select-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--dark-gray);
+  border-bottom: 2px solid var(--dark-gray);
+  pointer-events: none;
+}
+
+/* File Upload Component */
+.file-upload-group {
+  margin-bottom: 1rem;
+}
+
+.file-upload-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 12px 16px;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--border-radius-md);
+  background-color: var(--light-gray);
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.file-upload-label:hover {
+  border-color: var(--primary-color);
+  background-color: #e3f2fd;
+}
+
+.file-upload-label strong {
+  color: var(--dark-gray);
+  font-weight: normal;
+}
+
+.file-upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--primary-color);
+  color: white;
+  padding: 8px 12px;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+.file-upload-btn:hover {
+  background-color: #1976D2;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: #e0f2f1; /* Light green */
+  border: 1px solid #c8e6c9;
+  padding: 8px 12px;
+  border-radius: var(--border-radius-md);
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+.file-icon {
+  color: var(--secondary-color);
+  font-size: 1.2rem;
+}
+.remove-file-icon {
+  color: var(--error-color);
+  cursor: pointer;
+  margin-left: auto;
+  font-size: 1rem;
+  transition: opacity 0.2s;
+}
+.remove-file-icon:hover {
+  opacity: 0.7;
+}
+
+/* Buttons */
+.btn {
+  padding: 12px 18px;
+  border: none;
+  border-radius: var(--border-radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: #1976D2;
+  box-shadow: var(--shadow-sm);
+}
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: #5a6268;
+  box-shadow: var(--shadow-sm);
+}
+.btn:disabled {
+  background-color: var(--medium-gray);
+  color: var(--dark-gray);
+  cursor: not-allowed;
+}
+
+.download-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+}
+
+/* Status Messages */
+.status-message {
+  padding: 2rem;
+  border-radius: var(--border-radius-md);
+  text-align: center;
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.status-message.loading {
+  background-color: #e3f2fd; /* Light blue */
+  border: 1px solid #bbdefb;
+  color: #1976D2;
+}
+
+.status-message.error {
+  background-color: #ffebee; /* Light red */
+  border: 1px solid #ef9a9a;
+  color: var(--error-color);
+}
+.status-message.error h3 {
+  color: var(--error-color);
+}
+
+.status-message.empty-state {
+  background-color: #ffffff;
+  border: 1px dashed var(--border-color);
+  color: var(--dark-gray);
+}
+
+.status-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+.status-message.error .status-icon {
+  color: var(--error-color);
+}
+.status-message.empty-state .status-icon {
+  color: var(--medium-gray);
+}
+
+
+/* Results Container */
+.results-container {
+  margin-top: 1.5rem;
+}
+
+.results-summary {
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+  color: #1a202c;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.icon-success {
+  color: var(--secondary-color);
+}
+
+
+/* Finding Card Styles */
+.finding-card {
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+  transition: transform 0.2s;
+}
+
+.finding-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.card-header {
+  padding: 0.75rem 1.25rem;
+  background-color: var(--light-gray);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.card-badge {
+  background-color: var(--accent-color);
+  color: #333;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-sm);
+  font-weight: 600;
+}
+
+.card-page {
+  font-weight: 500;
+  color: var(--dark-gray);
+}
+
+.card-section {
+  padding: 1.25rem;
+  border-bottom: 1px solid var(--medium-gray);
+}
+
+.finding-card:last-child .card-section {
+  border-bottom: none;
+}
+
+.card-section h4 {
+  font-size: 1.05rem;
+  margin-bottom: 0.75rem;
+  color: #1a202c;
+}
+
+.text-pair {
+  display: grid;
+  grid-template-columns: 1fr; /* Stack on mobile */
+  gap: 1rem;
+}
+
+@media (min-width: 600px) { /* Two columns on larger screens */
+  .text-pair {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.text-block {
+  background-color: var(--light-gray);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 1rem;
+}
+
+.text-block strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--dark-gray);
+}
+
+blockquote {
+  margin: 0;
+  padding: 0;
+  color: #555;
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.suggestion-section {
+  background-color: #e8f5e9; /* Light green for suggestions */
+  border-top: 1px solid #d0e9d1;
+}
+.suggestion-section strong {
+  color: var(--secondary-color);
+  font-weight: 600;
+}
+
+
+/* Highlighted Text */
+.highlight-error {
+  background-color: #ffebee; /* Light red */
+  color: var(--error-color);
+  padding: 2px 5px;
+  border-radius: var(--border-radius-sm);
+  display: inline; /* To not break text flow */
+}
+.highlight-warning {
+  background-color: #fffde7; /* Light yellow */
+  color: #f57f17; /* Darker yellow */
+  padding: 2px 5px;
+  border-radius: var(--border-radius-sm);
+  display: inline;
+}
