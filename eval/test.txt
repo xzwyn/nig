@@ -1,16 +1,388 @@
--> Saved Document Intelligence JSON to 'output\doc_intelligence_2_en_20251110_121453.json'
-Connecting to Document Intelligence service for '2_de.pdf'...
--> Analysis complete.
--> Saved Document Intelligence JSON to 'output\doc_intelligence_2_de_20251110_121501.json'
-Step 2: Processing full document content...
-Extracted 6 EN segments and 6 DE segments.
-Running Full Document (Direct) Alignment Workflow...
-Step 3/5: Performing semantic alignment...
-Generating Embeddings: 100%|██████████████████████████████████████████████████| 1/1 [00:01<00:00,  1.95s/it] 
-Generating Embeddings: 100%|██████████████████████████████████████████████████| 1/1 [00:00<00:00,  1.64it/s] 
-Finding best 1-to-1 matches using margin-based scoring...
-Alignment complete. Found 6 aligned pairs.
-Step 4/5: Evaluating aligned pairs for errors...
-Evaluating Pairs: 100%|███████████████████████████████████████████████████████| 6/6 [00:11<00:00,  1.87s/it]
-Step 5/5: Saving alignment and evaluation reports...
-Analysis complete. Preparing final response...
+import { useState, useEffect } from 'react'; // Import useEffect
+import axios from 'axios';
+import { RingLoader } from 'react-spinners';
+import { 
+  FiFile, FiUploadCloud, FiX, FiCheckCircle, FiAlertTriangle, 
+  FiDownload, FiCpu, FiSettings, FiFileText, FiZap 
+} from 'react-icons/fi';
+import './App.css';
+
+const API_URL = 'http://localhost:8000';
+
+// Array of status messages and their estimated duration (in milliseconds)
+const statusMessages = [
+  { text: "Step 1/5: Connecting to Document Intelligence...", duration: 5000 },
+  { text: "Step 2/5: Processing and structuring content...", duration: 3000 },
+  { text: "Step 3/5: Generating text embeddings...", duration: 5000 },
+  { text: "Step 4/5: Performing semantic alignment...", duration: 3000 },
+  { text: "Step 5/5: Evaluating translation pairs...", duration: 10000 },
+  { text: "Finalizing analysis... this may take a moment.", duration: 100000 } // Long final step
+];
+
+function App() {
+  // --- State for the Form ---
+  const [englishFile, setEnglishFile] = useState(null);
+  const [germanFile, setGermanFile] = useState(null);
+  const [alignmentMode, setAlignmentMode] = useState('Full Document');
+  const [tocPageNum, setTocPageNum] = useState(2);
+
+  // --- State for the App Status ---
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  // --- NEW STATE for loading text ---
+  const [loadingStatus, setLoadingStatus] = useState("Initializing...");
+
+  // --- State for the Results ---
+  const [findings, setFindings] = useState([]);
+  const [reportBase64, setReportBase64] = useState(null);
+
+  /**
+   * Main function to handle the API call
+   */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!englishFile || !germanFile) {
+      setError('Please upload both PDF files.');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    setFindings([]);
+    setReportBase64(null);
+
+    // --- Start the simulated status updates ---
+    let messageIndex = 0;
+    setLoadingStatus(statusMessages[messageIndex].text);
+    
+    // We use a recursive function to chain the setTimeouts
+    const updateStatus = () => {
+      messageIndex++;
+      if (messageIndex < statusMessages.length && isLoading) {
+        setLoadingStatus(statusMessages[messageIndex].text);
+        setTimeout(updateStatus, statusMessages[messageIndex].duration);
+      }
+    };
+    // Start the chain
+    setTimeout(updateStatus, statusMessages[messageIndex].duration);
+    // --- End of status update logic ---
+
+    const formData = new FormData();
+    formData.append('english_pdf', englishFile);
+    formData.append('german_pdf', germanFile);
+    formData.append('alignment_mode', alignmentMode);
+    formData.append('toc_page_num', tocPageNum);
+
+    try {
+      const response = await axios.post(`${API_URL}/analyze`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setFindings(response.data.findings || []);
+      setReportBase64(response.data.report_base64);
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message;
+      setError(`Analysis Failed: ${errorMsg}`);
+    } finally {
+      setIsLoading(false); // This will stop the loading screen regardless of timers
+    }
+  };
+
+  /**
+   * Triggers a download of the Base64 Excel data
+   */
+  const handleDownload = () => {
+    if (!reportBase64) return;
+    const link = document.createElement('a');
+    link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${reportBase64}`;
+    link.download = `Translation_Evaluation_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="app-container">
+      <header className="app-header">
+        <h1><FiCpu className="header-icon" /> Translation AI Evaluator</h1>
+      </header>
+
+      <main className="app-main">
+        {/* --- Form and Controls Panel --- */}
+        <form onSubmit={handleSubmit} className="control-panel glass-panel">
+          
+          <div className="panel-section upload-section">
+            <h2 className="panel-header">
+              <FiUploadCloud /> 1. Upload Documents
+            </h2>
+            <div className="upload-zones">
+              <FileUploadZone
+                file={englishFile}
+                setFile={setEnglishFile}
+                title="English (Source) PDF"
+              />
+              <FileUploadZone
+                file={germanFile}
+                setFile={setGermanFile}
+                title="German (Translated) PDF"
+              />
+            </div>
+          </div>
+
+          <div className="panel-section config-section">
+            <h2 className="panel-header">
+              <FiSettings /> 2. Configure Analysis
+            </h2>
+            <div className="config-grid">
+              <div className="form-group segment-group">
+                <label>Alignment Mode</label>
+                <div className="segmented-control">
+                  <button
+                    type="button"
+                    className={`segment-option ${alignmentMode === 'ToC-Based' ? 'active' : ''}`}
+                    onClick={() => setAlignmentMode('ToC-Based')}
+                  >
+                    ToC-Based
+                  </button>
+                  <button
+                    type="button"
+                    className={`segment-option ${alignmentMode === 'Full Document' ? 'active' : ''}`}
+                    onClick={() => setAlignmentMode('Full Document')}
+                  >
+                    Full Document
+                  </button>
+                </div>
+              </div>
+              
+              {alignmentMode === 'ToC-Based' && (
+                <div className="form-group toc-group">
+                  <label htmlFor="tocPageNum">ToC Page Number</label>
+                  <input
+                    id="tocPageNum"
+                    type="number"
+                    value={tocPageNum}
+                    onChange={(e) => setTocPageNum(parseInt(e.target.value, 10))}
+                    min="1"
+                    step="1"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="panel-section run-section">
+            <h2 className="panel-header">
+              <FiZap /> 3. Execute
+            </h2>
+            <div className="run-buttons">
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isLoading || !englishFile || !germanFile}
+              >
+                {isLoading ? (
+                  <RingLoader size={20} color={"#fff"} speedMultiplier={1} />
+                ) : (
+                  'Run Analysis'
+                )}
+                {isLoading && <span>Analyzing...</span>}
+              </button>
+              
+              {reportBase64 && !isLoading && (
+                <button type="button" onClick={handleDownload} className="btn btn-secondary">
+                  <FiDownload />
+                  <span>Download Report</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </form>
+
+        {/* --- Results Panel --- */}
+        <section className="results-panel">
+          <h2 className="panel-header">Evaluation Results</h2>
+          <div className="results-content glass-panel">
+            <StatusDisplay
+              isLoading={isLoading}
+              error={error}
+              findingsCount={findings.length}
+              loadingStatus={loadingStatus} // <-- Pass the new state here
+            />
+            
+            {findings.length > 0 && !isLoading && (
+              <div className="findings-list">
+                {findings.map((finding, index) => (
+                  <FindingCard key={index} finding={finding} />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+// --- Helper Component: FileUploadZone ---
+// (This component is unchanged)
+function FileUploadZone({ file, setFile, title }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const inputId = `file-input-${title.replace(' ', '-')}`;
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && droppedFile.type === "application/pdf") {
+      setFile(droppedFile);
+    }
+  };
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+    }
+  };
+
+  if (file) {
+    return (
+      <div className="file-drop-zone file-selected">
+        <FiFileText className="file-icon" />
+        <span className="file-name">{file.name}</span>
+        <button
+          type="button"
+          className="remove-file-btn"
+          onClick={() => setFile(null)}
+        >
+          <FiX />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <label
+      htmlFor={inputId}
+      className={`file-drop-zone ${isDragging ? 'dragging' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <input
+        type="file"
+        id={inputId}
+        accept="application/pdf"
+        onChange={handleFileChange}
+        className="hidden-file-input"
+      />
+      <FiUploadCloud className="upload-icon" />
+      <span className="upload-title">{title}</span>
+      <span className="upload-text">Drag & drop PDF, or click to browse</span>
+    </label>
+  );
+}
+
+// --- Helper Component: StatusDisplay ---
+// (This component is UPDATED to show loadingStatus)
+function StatusDisplay({ isLoading, error, findingsCount, loadingStatus }) {
+  if (isLoading) {
+    return (
+      <div className="status-display loading">
+        <RingLoader color={"#8884d8"} size={60} />
+        <h3>Analyzing Documents...</h3>
+        {/* --- NEW: Display the current status text --- */}
+        <p className="loading-status-text">{loadingStatus}</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="status-display error">
+        <FiAlertTriangle className="status-icon" />
+        <h3>Analysis Failed</h3>
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (findingsCount === 0) {
+    return (
+      <div className="status-display empty">
+        <FiCheckCircle className="status-icon" />
+        <h3>Ready to Analyze</h3>
+        <p>Upload your documents and click "Run Analysis" to see the results.</p>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+// --- Helper Component: FindingCard ---
+// (This component is unchanged)
+function FindingCard({ finding }) {
+  const {
+    page,
+    type,
+    suggestion,
+    english_text,
+    german_text,
+    original_phrase,
+    translated_phrase,
+  } = finding;
+  
+  const typeClass = type.toLowerCase().replace(' ', '-');
+
+  return (
+    <div className="finding-card glass-panel">
+      <div className="card-header">
+        <span className={`card-badge ${typeClass}`}>{type}</span>
+        <span className="card-page">Page: {page || 'N/A'}</span>
+      </div>
+
+      {(original_phrase || translated_phrase) && (
+        <div className="card-section focus-section">
+          <h4>Key Discrepancy</h4>
+          <div className="text-pair">
+            <div className="text-block">
+              <strong>English Phrase</strong>
+              <p className="highlight-en">{original_phrase || 'N/A'}</p>
+            </div>
+            <div className="text-block">
+              <strong>German Phrase</strong>
+              <p className="highlight-de">{translated_phrase || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="card-section context-section">
+        <h4>Full Context</h4>
+        <div className="text-pair">
+          <div className="text-block">
+            <strong>English Text</strong>
+            <blockquote>{english_text}</blockquote>
+          </div>
+          <div className="text-block">
+            <strong>German Text</strong>
+            <blockquote>{german_text}</blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div className="card-section suggestion-section">
+        <strong><FiZap /> Suggestion:</strong>
+        <p>{suggestion}</p>
+      </div>
+    </div>
+  );
+}
+
+export default App;
