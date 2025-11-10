@@ -1,20 +1,614 @@
-npm run dev
+// frontend/src/App.css
+/* frontend/src/App.css */
 
-> frontend@0.0.0 dev
-> vite
+/* Basic Resets */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f0f2f6;
+}
 
-11:37:12 am [vite] (client) Re-optimizing dependencies because lockfile has changed
+body {
+  margin: 0;
+}
 
-  VITE v7.2.2  ready in 641 ms
+/* Main Layout */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
 
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: use --host to expose
-  ➜  press h + enter to show help
-(!) Failed to run dependency scan. Skipping dependency pre-bundling. Error: The following dependencies are imported but could not be resolved:
+.sidebar {
+  width: 350px;
+  background-color: #ffffff;
+  border-right: 1px solid #dcdcdc;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
 
-  react-spinners (imported by C:/Users/M3ZEDTZ/Downloads/full/frontend/src/App.jsx)
+.main-content {
+  flex-grow: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
 
-Are they installed?
-    at file:///C:/Users/M3ZEDTZ/Downloads/full/frontend/node_modules/vite/dist/node/chunks/config.js:32522:33
-    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async file:///C:/Users/M3ZEDTZ/Downloads/full/frontend/node_modules/vite/dist/node/chunks/config.js:34730:15
+h1 {
+  font-size: 1.5rem;
+  color: #111;
+  margin: 0;
+}
+
+h2 {
+  font-size: 1.25rem;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 0.5rem;
+}
+
+/* Form Styles */
+form, .download-area {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.form-group label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.form-group input[type="file"],
+.form-group select,
+.form-group input[type="number"] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box; /* Important for padding to work nicely */
+}
+.run-button, .download-button {
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.run-button {
+  background-color: #007aff;
+  color: white;
+}
+.run-button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+.run-button:disabled {
+  background-color: #dcdcdc;
+  cursor: not-allowed;
+}
+.download-button {
+  background-color: #34c759;
+  color: white;
+}
+
+/* Status & Results */
+.status-container {
+  padding: 2rem;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  text-align: center;
+  color: #555;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.status-container.error {
+  border-color: #ff3b30;
+  background-color: #fff5f5;
+  color: #c50000;
+}
+
+/* Finding Card Styles */
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.finding-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+.card-header {
+  padding: 0.75rem 1.25rem;
+  background-color: #f7f7f7;
+  border-bottom: 1px solid #e0e0e0;
+  font-weight: 600;
+}
+.card-section {
+  padding: 1.25rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+.finding-card:last-child .card-section {
+  border-bottom: none;
+}
+.grid-2-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+blockquote {
+  margin: 0;
+  padding: 0.75rem;
+  background-color: #f9f9f9;
+  border-left: 4px solid #e0e0e0;
+  color: #333;
+  font-style: italic;
+  font-size: 0.95rem;
+}
+.suggestion {
+  background-color: #f0f8ff;
+}
+.highlight-error {
+  background-color: #ffebeB;
+  color: #c50000;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.highlight-warning {
+  background-color: #fffbeb;
+  color: #7d4a00;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+// frontend/vite.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+})
+
+// frontend/README.md
+# React + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+// frontend/package.json
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-icons": "^5.5.0",
+    "spinners": "^1.2.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "vite": "^7.2.2"
+  }
+}
+
+// frontend/index.html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>frontend</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
+// frontend/eslint.config.js
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import { defineConfig, globalIgnores } from 'eslint/config'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{js,jsx}'],
+    extends: [
+      js.configs.recommended,
+      reactHooks.configs['recommended-latest'],
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        ecmaFeatures: { jsx: true },
+        sourceType: 'module',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+    },
+  },
+])
+
+// frontend/src/main.jsx
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App.jsx'
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+
+// frontend/src/index.css
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+// frontend/src/App.jsx
+// frontend/src/App.jsx
+
+import { useState } from 'react';
+import axios from 'axios';
+import { PacmanLoader } from 'react-spinners'; // A fun loader
+import './App.css'; // We will create this next
+
+// Your FastAPI backend URL
+const API_URL = 'http://localhost:8000';
+
+function App() {
+  // --- State for the Form ---
+  const [englishFile, setEnglishFile] = useState(null);
+  const [germanFile, setGermanFile] = useState(null);
+  const [alignmentMode, setAlignmentMode] = useState('ToC-Based');
+  const [tocPageNum, setTocPageNum] = useState(2); // Default to page 2 (1-indexed)
+
+  // --- State for the App Status ---
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // --- State for the Results ---
+  const [findings, setFindings] = useState([]);
+  const [reportBase64, setReportBase64] = useState(null);
+
+  /**
+   * Main function to handle the API call
+   */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!englishFile || !germanFile) {
+      setError('Please upload both PDF files.');
+      return;
+    }
+
+    // 1. Reset state and start loading
+    setIsLoading(true);
+    setError(null);
+    setFindings([]);
+    setReportBase64(null);
+
+    // 2. We MUST use FormData to send files
+    const formData = new FormData();
+    formData.append('english_pdf', englishFile);
+    formData.append('german_pdf', germanFile);
+    formData.append('alignment_mode', alignmentMode);
+    formData.append('toc_page_num', tocPageNum);
+
+    try {
+      // 3. Call the API
+      const response = await axios.post(`${API_URL}/analyze`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // 4. Set results on success
+      setFindings(response.data.findings || []);
+      setReportBase64(response.data.report_base64);
+
+    } catch (err) {
+      // 5. Set error on failure
+      const errorMsg = err.response?.data?.detail || err.message;
+      setError(`Analysis Failed: ${errorMsg}`);
+    } finally {
+      // 6. Stop loading
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Triggers a download of the Base64 Excel data
+   */
+  const handleDownload = () => {
+    if (!reportBase64) return;
+    
+    // Create a link element
+    const link = document.createElement('a');
+    // The 'data:' URL scheme is used to embed data in a URL
+    link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${reportBase64}`;
+    link.download = `Translation_Evaluation_${new Date().toISOString().split('T')[0]}.xlsx`;
+    
+    // Programmatically click the link to trigger the download
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="app-container">
+      {/* --- 1. The Sidebar (Configuration) --- */}
+      <aside className="sidebar">
+        <h1>📚 Translation Evaluator</h1>
+        <form onSubmit={handleSubmit}>
+          
+          <div className="form-group">
+            <label>English PDF (Source)</label>
+            <input 
+              type="file" 
+              accept="application/pdf"
+              onChange={(e) => setEnglishFile(e.target.files[0])} 
+            />
+          </div>
+
+          <div className="form-group">
+            <label>German PDF (Translation)</label>
+            <input 
+              type="file" 
+              accept="application/pdf"
+              onChange={(e) => setGermanFile(e.target.files[0])} 
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Alignment Mode</label>
+            <select 
+              value={alignmentMode} 
+              onChange={(e) => setAlignmentMode(e.target.value)}
+            >
+              <option value="ToC-Based">ToC-Based</option>
+              <option value="Full Document">Full Document</option>
+            </select>
+          </div>
+
+          {alignmentMode === 'ToC-Based' && (
+            <div className="form-group">
+              <label>ToC Page Number</label>
+              <input 
+                type="number" 
+                value={tocPageNum}
+                onChange={(e) => setTocPageNum(parseInt(e.target.value, 10))}
+                min="1"
+                step="1"
+              />
+            </div>
+          )}
+
+          <button 
+            type="submit" 
+            className="run-button" 
+            disabled={isLoading || !englishFile || !germanFile}
+          >
+            {isLoading ? '🚀 Analyzing...' : '🚀 Run Analysis'}
+          </button>
+
+        </form>
+        
+        {/* --- Download Button --- */}
+        {reportBase64 && !isLoading && (
+          <div className="download-area">
+            <h3>Export Results</h3>
+            <button onClick={handleDownload} className="download-button">
+              📥 Download Evaluation Report
+            </button>
+          </div>
+        )}
+      </aside>
+
+      {/* --- 2. The Main Content (Results) --- */}
+      <main className="main-content">
+        <h2>Evaluation Results</h2>
+
+        {isLoading && (
+          <div className="status-container">
+            <PacmanLoader color="#36d7b7" />
+            <p>Analyzing... This may take several minutes...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="status-container error">
+            <h3>🚨 Error</h3>
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!isLoading && !error && findings.length === 0 && (
+          <div className="status-container">
+            <p>Upload your PDFs, select an alignment mode, and click 'Run Analysis' to begin.</p>
+          </div>
+        )}
+        
+        {findings.length > 0 && (
+          <div className="results-list">
+            <h3>Found {findings.length} noteworthy items</h3>
+            {findings.map((finding, index) => (
+              <FindingCard key={index} finding={finding} />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+/**
+ * A self-contained component to render a single finding
+ */
+function FindingCard({ finding }) {
+  const { 
+    page, 
+    type, 
+    suggestion, 
+    english_text, 
+    german_text, 
+    original_phrase, 
+    translated_phrase 
+  } = finding;
+
+  return (
+    <div className="finding-card">
+      <div className="card-header">
+        <strong>Page:</strong> {page || 'N/A'} | <strong>Type:</strong> {type}
+      </div>
+      
+      {(original_phrase || translated_phrase) && (
+        <div className="card-section error-focus">
+          <h4>🔍 Error Focus</h4>
+          <div className="grid-2-col">
+            <div>
+              <strong>Original English Phrase:</strong>
+              <p className="highlight-error">{original_phrase || 'N/A'}</p>
+            </div>
+            <div>
+              <strong>Translated German Phrase:</strong>
+              <p className="highlight-warning">{translated_phrase || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="card-section">
+        <h4>Full Text Context</h4>
+        <div className="grid-2-col">
+          <div>
+            <strong>English Text:</strong>
+            <blockquote>{english_text}</blockquote>
+          </div>
+          <div>
+            <strong>German Text:</strong>
+            <blockquote>{german_text}</blockquote>
+          </div>
+        </div>
+      </div>
+
+      <div className="card-section suggestion">
+        <strong>💡 Suggestion:</strong> {suggestion}
+      </div>
+    </div>
+  );
+}
+
+export default App;
+
