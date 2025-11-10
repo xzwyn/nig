@@ -1,360 +1,445 @@
-import { useState } from 'react';
-import axios from 'axios';
-import { RingLoader } from 'react-spinners'; // A more 'tech' loader
-import { 
-  FiFile, FiUploadCloud, FiX, FiCheckCircle, FiAlertTriangle, 
-  FiDownload, FiCpu, FiSettings, FiFileText, FiZap 
-} from 'react-icons/fi';
-import './App.css';
+/* ---
+   Modern Dark/Glassmorphism Theme
+   --- */
 
-const API_URL = 'http://localhost:8000';
-
-function App() {
-  // --- State for the Form ---
-  const [englishFile, setEnglishFile] = useState(null);
-  const [germanFile, setGermanFile] = useState(null);
-  const [alignmentMode, setAlignmentMode] = useState('ToC-Based');
-  const [tocPageNum, setTocPageNum] = useState(2);
-
-  // --- State for the App Status ---
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  // --- State for the Results ---
-  const [findings, setFindings] = useState([]);
-  const [reportBase64, setReportBase64] = useState(null);
-
-  /**
-   * Main function to handle the API call
-   */
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!englishFile || !germanFile) {
-      setError('Please upload both PDF files.');
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    setFindings([]);
-    setReportBase64(null);
-
-    const formData = new FormData();
-    formData.append('english_pdf', englishFile);
-    formData.append('german_pdf', germanFile);
-    formData.append('alignment_mode', alignmentMode);
-    formData.append('toc_page_num', tocPageNum);
-
-    try {
-      const response = await axios.post(`${API_URL}/analyze`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setFindings(response.data.findings || []);
-      setReportBase64(response.data.report_base64);
-    } catch (err) {
-      const errorMsg = err.response?.data?.detail || err.message;
-      setError(`Analysis Failed: ${errorMsg}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /**
-   * Triggers a download of the Base64 Excel data
-   */
-  const handleDownload = () => {
-    if (!reportBase64) return;
-    const link = document.createElement('a');
-    link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${reportBase64}`;
-    link.download = `Translation_Evaluation_${new Date().toISOString().split('T')[0]}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1><FiCpu className="header-icon" /> Translation AI Evaluator</h1>
-      </header>
-
-      <main className="app-main">
-        {/* --- Form and Controls Panel --- */}
-        <form onSubmit={handleSubmit} className="control-panel glass-panel">
-          
-          <div className="panel-section upload-section">
-            <h2 className="panel-header">
-              <FiUploadCloud /> 1. Upload Documents
-            </h2>
-            <div className="upload-zones">
-              <FileUploadZone
-                file={englishFile}
-                setFile={setEnglishFile}
-                title="English (Source) PDF"
-              />
-              <FileUploadZone
-                file={germanFile}
-                setFile={setGermanFile}
-                title="German (Translated) PDF"
-              />
-            </div>
-          </div>
-
-          <div className="panel-section config-section">
-            <h2 className="panel-header">
-              <FiSettings /> 2. Configure Analysis
-            </h2>
-            <div className="config-grid">
-              {/* --- NEW Segmented Control --- */}
-              <div className="form-group segment-group">
-                <label>Alignment Mode</label>
-                <div className="segmented-control">
-                  <button
-                    type="button"
-                    className={`segment-option ${alignmentMode === 'ToC-Based' ? 'active' : ''}`}
-                    onClick={() => setAlignmentMode('ToC-Based')}
-                  >
-                    ToC-Based
-                  </button>
-                  <button
-                    type="button"
-                    className={`segment-option ${alignmentMode === 'Full Document' ? 'active' : ''}`}
-                    onClick={() => setAlignmentMode('Full Document')}
-                  >
-                    Full Document
-                  </button>
-                </div>
-              </div>
-              {/* --- End Segmented Control --- */}
-              
-              <div className={`form-group toc-group ${alignmentMode !== 'ToC-Based' ? 'disabled' : ''}`}>
-                <label htmlFor="tocPageNum">ToC Page Number</label>
-                <input
-                  id="tocPageNum"
-                  type="number"
-                  value={tocPageNum}
-                  onChange={(e) => setTocPageNum(parseInt(e.target.value, 10))}
-                  min="1"
-                  step="1"
-                  disabled={alignmentMode !== 'ToC-Based'}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="panel-section run-section">
-            <h2 className="panel-header">
-              <FiZap /> 3. Execute
-            </h2>
-            <div className="run-buttons">
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={isLoading || !englishFile || !germanFile}
-              >
-                {isLoading ? (
-                  <RingLoader size={20} color={"#fff"} speedMultiplier={1} />
-                ) : (
-                  'Run Analysis'
-                )}
-                {isLoading && <span>Analyzing...</span>}
-              </button>
-              
-              {reportBase64 && !isLoading && (
-                <button type="button" onClick={handleDownload} className="btn btn-secondary">
-                  <FiDownload />
-                  <span>Download Report</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </form>
-
-        {/* --- Results Panel --- */}
-        <section className="results-panel">
-          <h2 className="panel-header">Evaluation Results</h2>
-          <div className="results-content glass-panel">
-            <StatusDisplay
-              isLoading={isLoading}
-              error={error}
-              findingsCount={findings.length}
-            />
-            
-            {findings.length > 0 && !isLoading && (
-              <div className="findings-list">
-                {findings.map((finding, index) => (
-                  <FindingCard key={index} finding={finding} />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
-    </div>
-  );
+/* --- 1. Root Variables & Base Setup --- */
+:root {
+  /* Colors */
+  --bg-color: #0d1117; /* Dark background (GitHub Dark) */
+  --panel-bg: rgba(22, 27, 34, 0.6); /* Glassmorphic panel bg */
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --text-color: #c9d1d9; /* Light text */
+  --text-dim: #8b949e; /* Dimmer text */
+  --primary-color: #8884d8; /* Vibrant purple */
+  --primary-hover: #9e9bdc;
+  --secondary-color: #30d5c8; /* Turquoise */
+  --secondary-hover: #48e0d4;
+  --error-color: #f85149;
+  --warning-color: #f0ad4e;
+  --success-color: #30d5c8;
+  
+  /* Sizing & Effects */
+  --border-radius: 12px;
+  --panel-padding: 24px;
+  --backdrop-blur: 10px; /* The glass effect */
+  --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  
+  /* Font */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-// --- Helper Component: FileUploadZone ---
-function FileUploadZone({ file, setFile, title }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const inputId = `file-input-${title.replace(' ', '-')}`;
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.type === "application/pdf") {
-      setFile(droppedFile);
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-    }
-  };
-
-  if (file) {
-    return (
-      <div className="file-drop-zone file-selected">
-        <FiFileText className="file-icon" />
-        <span className="file-name">{file.name}</span>
-        <button
-          type="button"
-          className="remove-file-btn"
-          onClick={() => setFile(null)}
-        >
-          <FiX />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <label
-      htmlFor={inputId}
-      className={`file-drop-zone ${isDragging ? 'dragging' : ''}`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      <input
-        type="file"
-        id={inputId}
-        accept="application/pdf"
-        onChange={handleFileChange}
-        className="hidden-file-input"
-      />
-      <FiUploadCloud className="upload-icon" />
-      <span className="upload-title">{title}</span>
-      <span className="upload-text">Drag & drop PDF, or click to browse</span>
-    </label>
-  );
+body {
+  margin: 0;
+  background-color: var(--bg-color);
+  background-image: linear-gradient(180deg, rgba(22, 27, 34, 0.1) 0%, var(--bg-color) 100%);
+  color: var(--text-color);
+  min-height: 100vh;
 }
 
-// --- Helper Component: StatusDisplay ---
-function StatusDisplay({ isLoading, error, findingsCount }) {
-  if (isLoading) {
-    return (
-      <div className="status-display loading">
-        <RingLoader color={"#8884d8"} size={60} />
-        <h3>Analyzing Documents...</h3>
-        <p>This may take several minutes. Please wait.</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="status-display error">
-        <FiAlertTriangle className="status-icon" />
-        <h3>Analysis Failed</h3>
-        <p>{error}</p>
-      </div>
-    );
-  }
-
-  if (findingsCount === 0) {
-    return (
-      <div className="status-display empty">
-        <FiCheckCircle className="status-icon" />
-        <h3>Ready to Analyze</h3>
-        <p>Upload your documents and click "Run Analysis" to see the results.</p>
-      </div>
-    );
-  }
-
-  return null; // Don't show anything if there are findings (they will show instead)
+/* --- 2. Main Layout & Header --- */
+.app-container {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 1.5rem 2rem;
+  box-sizing: border-box;
 }
 
-// --- Helper Component: FindingCard ---
-function FindingCard({ finding }) {
-  const {
-    page,
-    type,
-    suggestion,
-    english_text,
-    german_text,
-    original_phrase,
-    translated_phrase,
-  } = finding;
-
-  // Determine a color class based on the finding type
-  const typeClass = type.toLowerCase().replace(' ', '-');
-
-  return (
-    <div className="finding-card glass-panel">
-      <div className="card-header">
-        <span className={`card-badge ${typeClass}`}>{type}</span>
-        <span className="card-page">Page: {page || 'N/A'}</span>
-      </div>
-
-      {(original_phrase || translated_phrase) && (
-        <div className="card-section focus-section">
-          <h4>Key Discrepancy</h4>
-          <div className="text-pair">
-            <div className="text-block">
-              <strong>English Phrase</strong>
-              <p className="highlight-en">{original_phrase || 'N/A'}</p>
-            </div>
-            <div className="text-block">
-              <strong>German Phrase</strong>
-              <p className="highlight-de">{translated_phrase || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="card-section context-section">
-        <h4>Full Context</h4>
-        <div className="text-pair">
-          <div className="text-block">
-            <strong>English Text</strong>
-            <blockquote>{english_text}</blockquote>
-          </div>
-          <div className="text-block">
-            <strong>German Text</strong>
-            <blockquote>{german_text}</blockquote>
-          </div>
-        </div>
-      </div>
-
-      <div className="card-section suggestion-section">
-        <strong><FiZap /> Suggestion:</strong>
-        <p>{suggestion}</p>
-      </div>
-    </div>
-  );
+.app-header {
+  padding: 1.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--panel-border);
+  margin-bottom: 2rem;
 }
 
-export default App;
+.app-header h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.header-icon {
+  font-size: 2rem;
+  color: var(--primary-color);
+}
+
+.app-main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+/* --- 3. Glass Panel Base Style --- */
+.glass-panel {
+  background: var(--panel-bg);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(var(--backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--backdrop-blur));
+  box-shadow: var(--shadow);
+  padding: var(--panel-padding);
+}
+
+/* --- 4. Control Panel --- */
+.control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  height: min-content; /* Panel only as tall as its content */
+}
+
+.panel-header {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.upload-zones, .config-grid, .run-buttons {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+/* --- 5. File Upload Zone --- */
+.file-drop-zone {
+  border-radius: var(--border-radius);
+  border: 2px dashed var(--panel-border);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-height: 120px;
+}
+
+.file-drop-zone.dragging,
+.file-drop-zone:hover {
+  border-color: var(--primary-color);
+  background-color: rgba(136, 132, 216, 0.1);
+}
+
+.hidden-file-input { display: none; }
+.upload-icon { font-size: 2rem; color: var(--primary-color); }
+.upload-title { font-weight: 600; color: #fff; margin-top: 0.5rem; }
+.upload-text { font-size: 0.9rem; color: var(--text-dim); }
+
+.file-selected {
+  flex-direction: row;
+  justify-content: space-between;
+  border-style: solid;
+  border-color: var(--success-color);
+  background-color: rgba(48, 213, 200, 0.05);
+  padding: 1rem 1.5rem;
+  min-height: auto;
+}
+.file-icon { font-size: 1.5rem; color: var(--success-color); }
+.file-name {
+  font-weight: 500;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.remove-file-btn {
+  background: transparent;
+  border: none;
+  color: var(--error-color);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+}
+
+/* --- 6. Config Section --- */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.form-group label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.form-group input {
+  background: var(--bg-color);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text-color);
+  font-size: 1rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(136, 132, 216, 0.3);
+}
+.form-group.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* --- NEW Segmented Control --- */
+.form-group.segment-group {
+  /* Make the segment control span both columns in the grid */
+  grid-column: 1 / -1; 
+}
+
+.segmented-control {
+  display: flex;
+  width: 100%;
+  background: var(--bg-color);
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  padding: 4px;
+  box-sizing: border-box;
+}
+.segment-option {
+  flex: 1; /* Each option takes equal space */
+  padding: 0.6rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px; /* Slightly smaller radius than container */
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+.segment-option.active {
+  background-color: var(--primary-color);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(136, 132, 216, 0.3);
+}
+.segment-option:not(.active):hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-color);
+}
+/* --- End Segmented Control --- */
+
+
+/* --- 7. Run Section & Buttons --- */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-primary {
+  background-color: var(--primary-color);
+  color: #fff;
+  border: 1px solid var(--primary-color);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+  box-shadow: 0 0 15px rgba(136, 132, 216, 0.5);
+}
+.btn-secondary {
+  background-color: transparent;
+  color: var(--secondary-color);
+  border: 1px solid var(--secondary-color);
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: rgba(48, 213, 200, 0.1);
+  box-shadow: 0 0 15px rgba(48, 213, 200, 0.5);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- 8. Results Panel --- */
+.results-panel .panel-header {
+  margin: 0 0 1.5rem 0;
+  padding-bottom: 0;
+  border: none;
+}
+.results-content {
+  min-height: 300px;
+}
+
+/* --- 9. Status Display --- */
+.status-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem 1rem;
+  min-height: 250px;
+  color: var(--text-dim);
+}
+.status-display .status-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.status-display h3 {
+  font-size: 1.25rem;
+  color: #fff;
+  margin: 0.5rem 0;
+}
+.status-display.loading { color: var(--primary-color); }
+.status-display.error { color: var(--error-color); }
+.status-display.error h3 { color: var(--error-color); }
+.status-display.empty { color: var(--success-color); }
+.status-display.empty h3 { color: var(--success-color); }
+
+/* --- 10. Findings List & Card --- */
+.findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.finding-card {
+  padding: 0; /* Let sections handle padding */
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem var(--panel-padding);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.card-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: var(--primary-color);
+  color: #fff;
+}
+/* Badge color overrides */
+.card-badge.mistranslation { background-color: var(--error-color); }
+.card-badge.omission { background-color: var(--warning-color); color: #000; }
+.card-badge.addition { background-color: var(--warning-color); color: #000; }
+.card-badge.context-mismatch { background-color: #ff8c00; } /* Dark Orange */
+
+.card-page {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.card-section {
+  padding: 1.5rem var(--panel-padding);
+}
+.card-section h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: 0 0 1rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.text-pair {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+.text-block {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+}
+.text-block strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #fff;
+  font-weight: 500;
+}
+.text-block blockquote, .text-block p {
+  margin: 0;
+  color: var(--text-color);
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.highlight-en {
+  color: #ffb8b8; /* Light red */
+  background: rgba(248, 81, 73, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-style: normal !important;
+}
+.highlight-de {
+  color: #fffb8b; /* Light yellow */
+  background: rgba(240, 173, 78, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-style: normal !important;
+}
+
+.suggestion-section {
+  background: rgba(48, 213, 200, 0.05);
+  border-top: 1px solid var(--panel-border);
+}
+.suggestion-section strong {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--secondary-color);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.suggestion-section p {
+  margin: 0.5rem 0 0 0;
+  color: var(--text-color);
+  font-size: 1rem;
+}
+
+/* --- 11. Responsive Design --- */
+@media (min-width: 768px) {
+  .upload-zones, .config-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .run-buttons {
+    grid-template-columns: auto auto 1fr;
+    justify-content: flex-start;
+  }
+}
+
+@media (min-width: 1200px) {
+  .app-main {
+    grid-template-columns: 550px 1fr; /* Fixed sidebar, flexible content */
+    align-items: flex-start; /* Align tops */
+  }
+  .text-pair {
+    grid-template-columns: 1fr 1fr;
+  }
+  .file-name {
+    max-width: 300px; /* More space for file names */
+  }
+}
