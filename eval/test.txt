@@ -1,387 +1,239 @@
-import { useState, useRef } from 'react'; // Import useRef
-import axios from 'axios';
-import { RingLoader } from 'react-spinners';
-import { 
-  FiFile, FiUploadCloud, FiX, FiCheckCircle, FiAlertTriangle, 
-  FiDownload, FiCpu, FiSettings, FiFileText, FiZap 
-} from 'react-icons/fi';
-import './App.css';
+# --- FastAPI & Standard Lib Imports ---
+import io
+import base64
+import traceback
+import json
+import asyncio  # <-- NEW: For async operations
+from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Any, AsyncGenerator
 
-const API_URL = 'http://localhost:8000';
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse  # <-- NEW: For SSE
 
-// Array of status messages and their estimated duration (in milliseconds)
-// Tuned to be more realistic based on your logs
-const statusMessages = [
-  { text: "Step 1/5: Connecting to Document Intelligence...", duration: 8000 },
-  { text: "Step 2/5: Processing and structuring content...", duration: 2000 },
-  { text: "Step 3/5: Generating text embeddings...", duration: 3000 },
-  { text: "Step 4/5: Performing semantic alignment...", duration: 2000 },
-  { text: "Step 5/5: Evaluating translation pairs...", duration: 11000 },
-  { text: "Finalizing analysis...", duration: 100000 } // Long final step
-];
+# --- Import your project modules ---
+import config
+from src.clients.doc_intelligence_client import analyze_pdf
+from src.processing.json_parser import process_document_json
+from src.processing.toc_parser import get_toc_text_from_pdf_bytes, structure_toc
+from src.alignment.toc_aligner import align_tocs
+from src.alignment.semantic_aligner import align_content
+from src.evaluation.pipeline import run_evaluation_pipeline
+from src.reporting.excel_writer import (
+    create_excel_report_in_memory,
+    save_alignment_report,
+    save_evaluation_report,
+    save_sectionwise_debug_report
+)
 
-function App() {
-  // --- State for the Form ---
-  const [englishFile, setEnglishFile] = useState(null);
-  const [germanFile, setGermanFile] = useState(null);
-  const [alignmentMode, setAlignmentMode] = useState('Full Document');
-  const [tocPageNum, setTocPageNum] = useState(2);
+# --- FastAPI App Initialization ---
+app = FastAPI(
+    title="Translation Evaluator API",
+    description="Analyzes and evaluates translated PDF documents."
+)
 
-  // --- State for the App Status ---
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [loadingStatus, setLoadingStatus] = useState("Initializing...");
-  const [analysisComplete, setAnalysisComplete] = useState(false);
+# --- CORS Configuration (CRITICAL) ---
+origins = [
+    "http://localhost:5173",  # Default Vite port
+    "http://localhost:3000",  # Default Create React App port
+    "http://localhost",
+    "http://127.0.0.1",
+]
 
-  // --- Ref to store timer IDs ---
-  const timerRefs = useRef([]);
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-  // --- State for the Results ---
-  const [findings, setFindings] = useState([]);
-  const [reportBase64, setReportBase64] = useState(null);
 
-  /**
-   * Main function to handle the API call
-   */
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!englishFile || !germanFile) {
-      setError('Please upload both PDF files.');
-      return;
-    }
+# --- Helper to format SSE messages ---
+def format_sse_message(data: Dict[str, Any]) -> str:
+    """Formats a dictionary as a Server-Sent Event string."""
+    json_data = json.dumps(data)
+    return f"data: {json_data}\n\n"
 
-    // --- Clear any old, lingering timers ---
-    timerRefs.current.forEach(timerId => clearTimeout(timerId));
-    timerRefs.current = [];
 
-    // --- RESET ALL STATES ---
-    setIsLoading(true);
-    setError(null);
-    setFindings([]);
-    setReportBase64(null);
-    setAnalysisComplete(false);
+# --- The Streaming Analysis Generator ---
+async def run_analysis_stream(
+    eng_pdf_bytes: bytes,
+    ger_pdf_bytes: bytes,
+    eng_filename: str,
+    ger_filename: str,
+    alignment_mode: str,
+    toc_page_num: int
+) -> AsyncGenerator[str, None]:
+    """
+    This generator function performs the analysis and yields
+    status updates as Server-Sent Events.
+    """
+    output_dir = Path(config.OUTPUT_DIR)
+    output_dir.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_filename = f"{Path(eng_filename).stem}_{timestamp}"
+    
+    try:
+        # --- Step 1: Azure Document Intelligence ---
+        yield format_sse_message({"status": "progress", "message": "Step 1/5: Connecting to Document Intelligence..."})
+        
+        # Run blocking I/O in a separate thread
+        eng_json_data_task = asyncio.to_thread(analyze_pdf, eng_pdf_bytes, eng_filename)
+        ger_json_data_task = asyncio.to_thread(analyze_pdf, ger_pdf_bytes, ger_filename)
+        eng_json_data, ger_json_data = await asyncio.gather(eng_json_data_task, ger_json_data_task)
+        
+        # --- Step 2: Processing full document content ---
+        yield format_sse_message({"status": "progress", "message": "Step 2/5: Processing and structuring content..."})
+        
+        full_english_content_task = asyncio.to_thread(process_document_json, eng_json_data)
+        full_german_content_task = asyncio.to_thread(process_document_json, ger_json_data)
+        full_english_content, full_german_content = await asyncio.gather(full_english_content_task, full_german_content_task)
 
-    // --- Start the new status update logic ---
-    let cumulativeDelay = 0;
-    // Set the first message immediately
-    setLoadingStatus(statusMessages[0].text);
+        final_aligned_pairs: List[Dict[str, Any]] = []
 
-    // Schedule all subsequent messages
-    for (let i = 1; i < statusMessages.length; i++) {
-      cumulativeDelay += statusMessages[i-1].duration; // Add duration of the *previous* step
-
-      const timerId = setTimeout(() => {
-        setLoadingStatus(statusMessages[i].text);
-      }, cumulativeDelay);
-
-      // Store the timer ID so we can cancel it
-      timerRefs.current.push(timerId);
-    }
-    // --- End of status update logic ---
-
-    const formData = new FormData();
-    formData.append('english_pdf', englishFile);
-    formData.append('german_pdf', germanFile);
-    formData.append('alignment_mode', alignmentMode);
-    formData.append('toc_page_num', tocPageNum);
-
-    try {
-      const response = await axios.post(`${API_URL}/analyze`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setFindings(response.data.findings || []);
-      setReportBase64(response.data.report_base64);
-    } catch (err) {
-      const errorMsg = err.response?.data?.detail || err.message;
-      setError(`Analysis Failed: ${errorMsg}`);
-    } finally {
-      setIsLoading(false);
-      setAnalysisComplete(true);
-      
-      // --- Clear all scheduled timers ---
-      timerRefs.current.forEach(timerId => clearTimeout(timerId));
-      timerRefs.current = [];
-    }
-  };
-
-  /**
-   * Triggers a download of the Base64 Excel data
-   */
-  const handleDownload = () => {
-    if (!reportBase64) return;
-    const link = document.createElement('a');
-    link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${reportBase64}`;
-    link.download = `Translation_Evaluation_${new Date().toISOString().split('T')[0]}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1><FiCpu className="header-icon" /> Translation AI Evaluator</h1>
-      </header>
-
-      <main className="app-main">
-        {/* --- Form and Controls Panel --- */}
-        <form onSubmit={handleSubmit} className="control-panel glass-panel">
-          
-          <div className="panel-section upload-section">
-            <h2 className="panel-header">
-              <FiUploadCloud /> 1. Upload Documents
-            </h2>
-            <div className="upload-zones">
-              <FileUploadZone
-                file={englishFile}
-                setFile={setEnglishFile}
-                title="English (Source) PDF"
-              />
-              <FileUploadZone
-                file={germanFile}
-                setFile={setGermanFile}
-                title="German (Translated) PDF"
-              />
-            </div>
-          </div>
-
-          <div className="panel-section config-section">
-            <h2 className="panel-header">
-              <FiSettings /> 2. Configure Analysis
-            </h2>
-            <div className="config-grid">
-              <div className="form-group segment-group">
-                <label>Alignment Mode</label>
-                <div className="segmented-control">
-                  <button
-                    type="button"
-                    className={`segment-option ${alignmentMode === 'ToC-Based' ? 'active' : ''}`}
-                    onClick={() => setAlignmentMode('ToC-Based')}
-                  >
-                    ToC-Based
-                  </button>
-                  <button
-                    type="button"
-                    className={`segment-option ${alignmentMode === 'Full Document' ? 'active' : ''}`}
-                    onClick={() => setAlignmentMode('Full Document')}
-                  >
-                    Full Document
-                  </button>
-                </div>
-              </div>
-              
-              {alignmentMode === 'ToC-Based' && (
-                <div className="form-group toc-group">
-                  <label htmlFor="tocPageNum">ToC Page Number</label>
-                  <input
-                    id="tocPageNum"
-                    type="number"
-                    value={tocPageNum}
-                    onChange={(e) => setTocPageNum(parseInt(e.target.value, 10))}
-                    min="1"
-                    step="1"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="panel-section run-section">
-            <h2 className="panel-header">
-              <FiZap /> 3. Execute
-            </h2>
-            <div className="run-buttons">
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={isLoading || !englishFile || !germanFile}
-              >
-                {isLoading ? (
-                  <RingLoader size={20} color={"#fff"} speedMultiplier={1} />
-                ) : (
-                  'Run Analysis'
-                )}
-                {isLoading && <span>Analyzing...</span>}
-              </button>
-              
-              {reportBase64 && !isLoading && (
-                <button type="button" onClick={handleDownload} className="btn btn-secondary">
-                  <FiDownload />
-                  <span>Download Report</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </form>
-
-        {/* --- Results Panel --- */}
-        <section className="results-panel">
-          <h2 className="panel-header">Evaluation Results</h2>
-          <div className="results-content glass-panel">
-            <StatusDisplay
-              isLoading={isLoading}
-              error={error}
-              findingsCount={findings.length}
-              loadingStatus={loadingStatus}
-              analysisComplete={analysisComplete} 
-            />
+        # ---
+        # --- START: WORKFLOW SPLIT ---
+        # ---
+        
+        if alignment_mode == "ToC-Based":
+            yield format_sse_message({"status": "progress", "message": "Step 3/5: Aligning Table of Contents..."})
             
-            {findings.length > 0 && !isLoading && (
-              <div className="findings-list">
-                {findings.map((finding, index) => (
-                  <FindingCard key={index} finding={finding} />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
-    </div>
-  );
-}
+            # --- ToC Extraction ---
+            eng_toc_page_idx = max(0, toc_page_num - 1)
+            eng_toc_task = asyncio.to_thread(get_toc_text_from_pdf_bytes, eng_pdf_bytes, page_num=eng_toc_page_idx)
+            ger_toc_task = asyncio.to_thread(get_toc_text_from_pdf_bytes, ger_pdf_bytes, page_num=eng_toc_page_idx)
+            eng_toc_text, ger_toc_text = await asyncio.gather(eng_toc_task, ger_toc_task)
+            
+            english_toc_task = asyncio.to_thread(structure_toc, eng_toc_text)
+            german_toc_task = asyncio.to_thread(structure_toc, ger_toc_text)
+            english_toc, german_toc = await asyncio.gather(english_toc_task, german_toc_task)
 
-// --- Helper Component: FileUploadZone ---
-// (Unchanged)
-function FileUploadZone({ file, setFile, title }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const inputId = `file-input-${title.replace(' ', '-')}`;
+            aligned_sections = await asyncio.to_thread(align_tocs, english_toc, german_toc)
 
-  const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
-  const handleDragLeave = (e) => { e.preventDefault(); setIsDragging(false); };
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.type === "application/pdf") setFile(droppedFile);
-  };
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) setFile(selectedFile);
-  };
+            # --- Section-wise Alignment ---
+            yield format_sse_message({"status": "progress", "message": "Step 4/5: Performing section-wise alignment..."})
+            section_debug_data = {}
+            for i, section in enumerate(aligned_sections):
+                eng_sec, ger_sec = section['english'], section['german']
+                
+                eng_section_content = [item for item in full_english_content if eng_sec['start_page'] <= item['page'] <= eng_sec['end_page']]
+                ger_section_content = [item for item in full_german_content if ger_sec['start_page'] <= item['page'] <= ger_sec['end_page']]
 
-  if (file) {
-    return (
-      <div className="file-drop-zone file-selected">
-        <FiFileText className="file-icon" />
-        <span className="file-name">{file.name}</span>
-        <button type="button" className="remove-file-btn" onClick={() => setFile(null)}>
-          <FiX />
-        </button>
-      </div>
-    );
-  }
-  return (
-    <label
-      htmlFor={inputId}
-      className={`file-drop-zone ${isDragging ? 'dragging' : ''}`}
-      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
-    >
-      <input type="file" id={inputId} accept="application/pdf" onChange={handleFileChange} className="hidden-file-input" />
-      <FiUploadCloud className="upload-icon" />
-      <span className="upload-title">{title}</span>
-      <span className="upload-text">Drag & drop PDF, or click to browse</span>
-    </label>
-  );
-}
+                if eng_section_content and ger_section_content:
+                    # This is the most CPU-intensive part
+                    aligned_pairs_section = await asyncio.to_thread(align_content, eng_section_content, ger_section_content, context_window=1)
+                    final_aligned_pairs.extend(aligned_pairs_section)
+                    section_debug_data[eng_sec['title']] = aligned_pairs_section
+            
+            # --- Save Debug Reports (Non-blocking) ---
+            final_aligned_pairs.sort(key=lambda x: (x['english']['page'] if x.get('english') else float('inf')))
+            debug_report_path = output_dir / f"debug_report_{base_filename}.xlsx"
+            await asyncio.to_thread(save_sectionwise_debug_report, section_debug_data, debug_report_path)
 
-// --- Helper Component: StatusDisplay ---
-// (Unchanged from previous step)
-function StatusDisplay({ isLoading, error, findingsCount, loadingStatus, analysisComplete }) {
-  if (isLoading) {
-    return (
-      <div className="status-display loading">
-        <RingLoader color={"#8884d8"} size={60} />
-        <h3>Analyzing Documents...</h3>
-        <p className="loading-status-text">{loadingStatus}</p>
-      </div>
-    );
-  }
+        
+        else: # Full Document (Direct)
+            yield format_sse_message({"status": "progress", "message": "Step 3/5: Generating text embeddings..."})
+            
+            # --- Step 3/5: Performing semantic alignment ---
+            # This is the most CPU-intensive part
+            final_aligned_pairs = await asyncio.to_thread(
+                align_content,
+                full_english_content,
+                full_german_content,
+                context_window=1,
+            )
+            yield format_sse_message({"status": "progress", "message": "Step 4/5: Performing semantic alignment..."})
 
-  if (error) {
-    return (
-      <div className="status-display error">
-        <FiAlertTriangle className="status-icon" />
-        <h3>Analysis Failed</h3>
-        <p>{error}</p>
-      </div>
-    );
-  }
+        # ---
+        # --- END: WORKFLOW SPLIT ---
+        # ---
+        
+        # --- Step 4/5: Evaluating aligned pairs ---
+        yield format_sse_message({"status": "progress", "message": "Step 5/5: Evaluating translation pairs..."})
+        evaluation_results = await asyncio.to_thread(run_evaluation_pipeline, final_aligned_pairs)
 
-  if (analysisComplete && findingsCount === 0) {
-    return (
-      <div className="status-display success"> 
-        <FiCheckCircle className="status-icon" />
-        <h3>Analysis Complete</h3>
-        <p>No significant issues found. Good to go!</p>
-      </div>
-    );
-  }
+        # --- Step 5/5: Saving reports and preparing response ---
+        yield format_sse_message({"status": "progress", "message": "Finalizing analysis..."})
+        
+        # --- Create Excel report in memory ---
+        excel_data_bytes = await asyncio.to_thread(create_excel_report_in_memory, evaluation_results)
+        report_base64 = base64.b64encode(excel_data_bytes).decode('utf-8')
+        
+        # --- Save reports to disk (can be done in parallel) ---
+        alignment_report_path = output_dir / f"alignment_{base_filename}.xlsx"
+        save_align_task = asyncio.to_thread(save_alignment_report, final_aligned_pairs, alignment_report_path)
+        
+        save_eval_task = None
+        if evaluation_results:
+            eval_report_path = output_dir / f"evaluation_{base_filename}.xlsx"
+            save_eval_task = asyncio.to_thread(save_evaluation_report, evaluation_results, eval_report_path)
+        
+        await save_align_task
+        if save_eval_task:
+            await save_eval_task
 
-  if (!analysisComplete && findingsCount === 0) { 
-    return (
-      <div className="status-display empty">
-        <FiCheckCircle className="status-icon" />
-        <h3>Ready to Analyze</h3>
-        <p>Upload your documents and click "Run Analysis" to see the results.</p>
-      </div>
-    );
-  }
+        # --- FINAL MESSAGE: Send all data to the client ---
+        yield format_sse_message({
+            "status": "complete",
+            "findings": evaluation_results,
+            "report_base64": report_base64
+        })
 
-  return null;
-}
+    except Exception as e:
+        print(f"FATAL: An error occurred during analysis: {e}")
+        traceback.print_exc()
+        # --- ERROR MESSAGE: Send the error to the client ---
+        yield format_sse_message({
+            "status": "error",
+            "message": f"An internal server error occurred: {e}"
+        })
 
-// --- Helper Component: FindingCard ---
-// (Unchanged)
-function FindingCard({ finding }) {
-  const {
-    page, type, suggestion, english_text, german_text, original_phrase, translated_phrase,
-  } = finding;
-  
-  const typeClass = type.toLowerCase().replace(' ', '-');
 
-  return (
-    <div className="finding-card glass-panel">
-      <div className="card-header">
-        <span className={`card-badge ${typeClass}`}>{type}</span>
-        <span className="card-page">Page: {page || 'N/A'}</span>
-      </div>
+# --- Health Check Endpoint ---
+@app.get("/", tags=["Status"])
+async def root():
+    """A simple health check endpoint."""
+    return {"message": "Translation Evaluator API is running"}
 
-      {(original_phrase || translated_phrase) && (
-        <div className="card-section focus-section">
-          <h4>Key Discrepancy</h4>
-          <div className="text-pair">
-            <div className="text-block">
-              <strong>English Phrase</strong>
-              <p className="highlight-en">{original_phrase || 'N/A'}</p>
-            </div>
-            <div className="text-block">
-              <strong>German Phrase</strong>
-              <p className="highlight-de">{translated_phrase || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-      )}
 
-      <div className="card-section context-section">
-        <h4>Full Context</h4>
-        <div className="text-pair">
-          <div className="text-block">
-            <strong>English Text</strong>
-            <blockquote>{english_text}</blockquote>
-          </div>
-          <div className="text-block">
-            <strong>German Text</strong>
-            <blockquote>{german_text}</blockquote>
-          </div>
-        </div>
-      </div>
+# --- Main Analysis Endpoint (Now returns a StreamingResponse) ---
+@app.post("/analyze", tags=["Analysis"])
+async def analyze_documents(
+    english_pdf: UploadFile = File(..., description="The source English PDF file"),
+    german_pdf: UploadFile = File(..., description="The translated German PDF file"),
+    alignment_mode: str = Form(..., description="Either 'ToC-Based' or 'Full Document'"),
+    toc_page_num: int = Form(1, description="The page number of the ToC (1-indexed)")
+):
+    """
+    Analyzes, aligns, and evaluates two PDF documents.
+    
+    This endpoint now streams status updates (SSE) and returns
+    the final result as the last message.
+    """
+    try:
+        eng_pdf_bytes = await english_pdf.read()
+        ger_pdf_bytes = await german_pdf.read()
 
-      <div className="card-section suggestion-section">
-        <strong><FiZap /> Suggestion:</strong>
-        <p>{suggestion}</p>
-      </div>
-    </div>
-  );
-}
+        return StreamingResponse(
+            run_analysis_stream(
+                eng_pdf_bytes,
+                ger_pdf_bytes,
+                english_pdf.filename,
+                german_pdf.filename,
+                alignment_mode,
+                toc_page_num
+            ),
+            media_type="text/event-stream"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred reading files: {e}"
+        )
 
-export default App;
+# --- To run this server ---
+# 1. Make sure your venv is active
+# 2. In your /backend/ folder, run:
+#    uvicorn main:app --reload
