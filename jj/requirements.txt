@@ -1,5 +1,8 @@
-streamlit
-pandas
-openpyxl
-unstructured[all]
-python-magic-bin==0.4.14
+IID    Bensl ID CandidateName
+I99264 		Nandana Ajoy
+I99265		Sabarinath B
+I99269-		Pallaka Vara Prajay Reddy
+I99271 D45PDQ5	Aswin Sreerag
+I99272 EMPJE5Z  Sripada Mani Srirama Sameer
+I99273		Tandlam Jlghnyas Reddy
+I99274 FJPIXQG	S Hariharasubramaniam
